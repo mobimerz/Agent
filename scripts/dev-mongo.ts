@@ -47,7 +47,10 @@ async function main() {
 
   let stopping = false;
   child.on("exit", (code) => {
-    if (!stopping) console.error(`[db] mongod exited unexpectedly (code ${code}). See ${logFile}`);
+    if (!stopping) {
+      if (code === 0) console.log("[db] mongod stopped.");
+      else console.error(`[db] mongod exited unexpectedly (code ${code}). See ${logFile}`);
+    }
     process.exit(code ?? 1);
   });
 
