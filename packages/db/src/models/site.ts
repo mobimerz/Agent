@@ -132,6 +132,20 @@ const siteSchema = new Schema(
       default: () => ({}),
     },
 
+    /** Flap detection state (see worker/src/incidents). */
+    alerting: {
+      type: new Schema(
+        {
+          /** Recent incident open/resolve times (last flapWindow). */
+          transitions: { type: [Date], default: [] },
+          unstable: { type: Boolean, default: false },
+          unstableSince: Date,
+        },
+        { _id: false },
+      ),
+      default: () => ({}),
+    },
+
     createdBy: { type: String },
   },
   { timestamps: true, collection: "sites" },
@@ -141,6 +155,7 @@ siteSchema.index({ url: 1 }, { unique: true });
 siteSchema.index({ status: 1, tags: 1 });
 siteSchema.index({ clientName: 1 });
 siteSchema.index({ "current.health": 1 });
+siteSchema.index({ "alerting.unstable": 1 });
 siteSchema.index({ name: "text", clientName: "text", url: "text", tags: "text" });
 
 export type SiteDoc = InferSchemaType<typeof siteSchema>;

@@ -2,7 +2,7 @@
 
 Internal monitoring for client websites — uptime, speed, SEO, SSL, domain, forms and more — with alerts by email (Brevo), Telegram and in-app, plus daily morning/night reports. 100% free stack, self-hosted on one Oracle Cloud Always Free ARM VM.
 
-> Status: **Phase 2** (sites + uptime/content monitoring). The full deployment guide (Oracle VM, Docker, Caddy, Brevo, Telegram, PageSpeed key, backups) lands in Phase 7.
+> Status: **Phase 3** (incidents + email/Telegram/in-app alerts). The full deployment guide (Oracle VM, Docker, Caddy, Brevo, Telegram, PageSpeed key, backups) lands in Phase 7.
 
 ## What works today
 
@@ -12,6 +12,10 @@ Internal monitoring for client websites — uptime, speed, SEO, SSL, domain, for
 - **Content / defacement check** (every 30 min): required keyword, hack/spam words (visible text only), drastic page-size change vs a moving baseline. If the page is unreachable it reports UNKNOWN (the uptime check owns availability — no double alerts).
 - **False-alarm protection:** a FAIL is re-checked twice, 60 s apart; the site is only marked **Down** after 3 consecutive failures. (`consecutiveFails` / `retryAttempt` live in `jobsState`; Phase 3 plugs the incident engine into `worker/src/incidents/hook.ts`.)
 - **Scheduler:** croner tick every 3 s → atomic job claim in MongoDB → p-queue (HTTP ×10). Restart-safe, no duplicate runs.
+- **Incidents & alerts:** incident opens after 3 failures (warnings after 2), resolves after **2** OKs, escalates/de-escalates in place, reminders every 2 h until acknowledged, flap detection (4+ changes in 30 min → one “unstable” alert, then silence), maintenance-window suppression. BLOCKED = WARNING via Telegram + in-app only; hacked/spam content = CRITICAL, always emailed.
+- **Channels:** Brevo email (React Email templates) + Telegram (HTML, multiple chats) + in-app (MongoDB Change Stream → SSE bell, polling fallback). 5+ alerts in 10 min → one grouped email; Brevo quota guard (250/day, 10 reserved for reports, digest after 200).
+- **Preview mode (`DRY_RUN=true`, default):** nothing is sent; every email/Telegram message is rendered and viewable at **/dev/emails** and **/dev/telegram**. Missing keys never crash anything — the channel just stays in preview.
+- **Worker watchdog:** the web app raises a CRITICAL alert itself if the worker heartbeat is 15+ min old.
 - **Dashboard:** overview + sites list (search, filter by status/client/tag, sort by status/response/name), 24 h sparklines, site detail with response-time chart, uptime % 24 h/7 d/30 d, 30-day status bar, latest result breakdown, **Run check now** (result appears without a page reload).
 
 ## Stack
@@ -28,6 +32,9 @@ web/              Next.js dashboard + API (auth, health, SSE)
 worker/           scheduler + check runner (separate process)
 packages/core     shared enums, constants, env schemas, helpers
 packages/db       Mongoose models, connection, indexes
+packages/emails   React Email templates (alerts, digest, test, invite)
+packages/notify   Brevo + Telegram clients, preview outbox, quota guard, alert dispatcher, watchdog
+docs/             GO-LIVE-CHECKLIST.md — every account/key/DNS record needed at the end
 deploy/           docker-compose, Mongo init scripts (Caddy/backup later)
 scripts/          dev database launcher, index sync
 ```
@@ -75,6 +82,10 @@ The web app has a **dev-only** simulation endpoint (returns 404 when `NODE_ENV=p
 | `block=cloudflare` | Cloudflare bot challenge → BLOCKED (WARN), not Down |
 | `redirect=3` / `redirect=9` | Redirect chain / redirect loop (too many redirects) |
 | `size=500` | Page padded to ~500 KB (page-size change) |
+
+### Alerts without any accounts
+
+With the default `DRY_RUN=true` (or while `BREVO_API_KEY` / `TELEGRAM_BOT_TOKEN` are empty), open **Settings → Notifications** to see channel status, the email quota and the *Send test* buttons, and **/dev/emails** · **/dev/telegram** for the exact rendered messages. See [`docs/GO-LIVE-CHECKLIST.md`](docs/GO-LIVE-CHECKLIST.md) for going live.
 
 ### Useful scripts
 

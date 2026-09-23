@@ -13,7 +13,9 @@
     "@siteguard/db": "workspace:*",
     "croner": "^10.0.1",
     "p-queue": "^9.3.3",
-    "pino": "^10.3.1"
+    "pino": "^10.3.1",
+    "@siteguard/notify": "workspace:*",
+    "@siteguard/emails": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.13.6",

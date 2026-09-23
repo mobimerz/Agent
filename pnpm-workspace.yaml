@@ -3,6 +3,7 @@ packages:
   - worker
   - packages/*
 allowBuilds:
+  msw: false
   esbuild: true
   unrs-resolver: true
 minimumReleaseAgeExclude:

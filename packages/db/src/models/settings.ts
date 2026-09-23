@@ -21,7 +21,8 @@ const settingsSchema = new Schema(
     _id: { type: String, default: SETTINGS_ID },
     timezone: { type: String, default: DEFAULT_TIMEZONE },
     alertEmails: { type: [String], default: [] },
-    telegramChatId: { type: String, default: "" },
+    /** Empty → use TELEGRAM_CHAT_ID from .env. */
+    telegramChatIds: { type: [String], default: [] },
     reports: {
       morning: { type: String, default: DEFAULTS.reportMorning },
       night: { type: String, default: DEFAULTS.reportNight },
@@ -36,11 +37,18 @@ const settingsSchema = new Schema(
       reminderAfterMin: { type: Number, default: DEFAULTS.reminderAfterMin },
       groupThreshold: { type: Number, default: DEFAULTS.groupThreshold },
       groupWindowMin: { type: Number, default: DEFAULTS.groupWindowMin },
+      resolveAfterOks: { type: Number, default: DEFAULTS.resolveAfterOks },
+      warnConfirmRuns: { type: Number, default: DEFAULTS.warnConfirmRuns },
+      flapThreshold: { type: Number, default: DEFAULTS.flapThreshold },
+      flapWindowMin: { type: Number, default: DEFAULTS.flapWindowMin },
+      stableAfterMin: { type: Number, default: DEFAULTS.stableAfterMin },
+      watchdogStaleMin: { type: Number, default: DEFAULTS.watchdogStaleMin },
     },
     email: {
       dailyLimit: { type: Number, default: DEFAULTS.emailDailyLimit },
       reservedForReports: { type: Number, default: DEFAULTS.emailReservedForReports },
       digestAfter: { type: Number, default: DEFAULTS.emailDigestAfter },
+      digestIntervalMin: { type: Number, default: DEFAULTS.digestIntervalMin },
     },
     linksMaxPages: { type: Number, default: DEFAULTS.linksMaxPages },
     screenshotsKeep: { type: Number, default: DEFAULTS.screenshotsKeep },

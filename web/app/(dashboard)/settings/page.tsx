@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRightIcon, SlidersHorizontalIcon, UsersIcon } from "lucide-react";
+import { BellRingIcon, ChevronRightIcon, SlidersHorizontalIcon, UsersIcon } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireSession, roleOf } from "@/lib/session";
@@ -28,12 +28,26 @@ export default async function SettingsPage() {
             </Card>
           </Link>
         )}
+        {isAdmin && (
+          <Link href="/settings/notifications" className="group">
+            <Card className="group-hover:border-foreground/20 transition-colors">
+              <CardHeader className="flex flex-row items-center gap-3">
+                <BellRingIcon className="text-muted-foreground size-5" />
+                <div className="flex-1">
+                  <CardTitle>Notifications</CardTitle>
+                  <CardDescription>Email &amp; Telegram status, test messages, email quota, previews.</CardDescription>
+                </div>
+                <ChevronRightIcon className="text-muted-foreground size-4" />
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
         <Card className="opacity-70">
           <CardHeader className="flex flex-row items-center gap-3">
             <SlidersHorizontalIcon className="text-muted-foreground size-5" />
             <div>
               <CardTitle>Alerts, reports & thresholds</CardTitle>
-              <CardDescription>Recipients, Telegram, report times, email quota — Phase 6.</CardDescription>
+              <CardDescription>Recipients, report times, thresholds, maintenance windows — Phase 6.</CardDescription>
             </div>
           </CardHeader>
         </Card>

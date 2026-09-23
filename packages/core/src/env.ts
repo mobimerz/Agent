@@ -37,6 +37,18 @@ const emailList = z.preprocess(
   z.array(z.email()),
 );
 
+/** "true"/"1"/"yes"/"on" → true, "false"/"0"/"no"/"off" → false, unset → default. */
+const boolish = (defaultValue: boolean) =>
+  z.preprocess((v) => {
+    if (v === undefined || v === null || v === "") return defaultValue;
+    return ["1", "true", "yes", "on"].includes(String(v).trim().toLowerCase());
+  }, z.boolean());
+
+const stringList = z.preprocess(
+  (v) => (typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []),
+  z.array(z.string()),
+);
+
 const baseSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
@@ -50,7 +62,14 @@ const baseSchema = z.object({
   EMAIL_DAILY_LIMIT: z.coerce.number().int().positive().default(DEFAULTS.emailDailyLimit),
   EMAIL_RESERVED_FOR_REPORTS: z.coerce.number().int().min(0).default(DEFAULTS.emailReservedForReports),
   TELEGRAM_BOT_TOKEN: optionalString,
-  TELEGRAM_CHAT_ID: optionalString,
+  /** One or more chat IDs, comma-separated (users, groups or channels). */
+  TELEGRAM_CHAT_ID: stringList,
+  /**
+   * Preview mode: nothing is actually sent; every email/Telegram message is
+   * rendered and stored for /dev/emails and /dev/telegram. Defaults to true, and
+   * each channel is forced into preview while its credentials are missing.
+   */
+  DRY_RUN: boolish(true),
 });
 
 export const webEnvSchema = baseSchema.extend({

@@ -9,15 +9,31 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { createInvite, revokeInvite } from "./actions";
+import { createInvite, emailInvite, revokeInvite } from "./actions";
 
 export function InviteForm() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("member");
   const [link, setLink] = useState<string | null>(null);
+  const [invited, setInvited] = useState<{ email: string; role: Role } | null>(null);
   const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [emailing, startEmailing] = useTransition();
+
+  function sendByEmail() {
+    startEmailing(async () => {
+      if (!link || !invited) return;
+      const res = await emailInvite({ email: invited.email, url: link, role: invited.role });
+      if (!res.ok) return void toast.error(res.error);
+      if (res.data.state === "preview") {
+        toast.info("Preview mode: invite email rendered, not sent", {
+          action: { label: "View", onClick: () => window.open(`/dev/emails?id=${res.data.previewId}`, "_blank") },
+        });
+      } else {
+        toast.success(`Invite emailed to ${invited.email}`);
+      }
+    });
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,6 +44,7 @@ export function InviteForm() {
         return;
       }
       setLink(res.data.url);
+      setInvited({ email, role });
       setCopied(false);
       setEmail("");
     });
@@ -90,17 +107,9 @@ export function InviteForm() {
             </Button>
           </div>
           <DialogFooter className="sm:justify-between">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {/* span wrapper so the tooltip still shows on a disabled button */}
-                <span tabIndex={0}>
-                  <Button type="button" variant="outline" disabled>
-                    <MailIcon /> Send by email
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Available once Brevo email is set up (Phase 3)</TooltipContent>
-            </Tooltip>
+            <Button type="button" variant="outline" onClick={sendByEmail} disabled={emailing || !invited}>
+              <MailIcon /> {emailing ? "Sending…" : "Send by email"}
+            </Button>
             <Button type="button" onClick={copy}>
               {copied ? "Copied" : "Copy link"}
             </Button>

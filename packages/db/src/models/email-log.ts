@@ -12,7 +12,10 @@ const emailLogSchema = new Schema(
     to: { type: [String], default: [] },
     subject: { type: String, default: "" },
     provider: { type: String, default: "brevo" },
-    status: { type: String, enum: ["sent", "failed", "skipped_quota"], required: true },
+    /** Number of alerts bundled into this email (grouped/digest). */
+    items: { type: Number, default: 1 },
+    /** preview = rendered in dry-run mode (counts toward the quota, so limits behave the same). */
+    status: { type: String, enum: ["sent", "preview", "failed", "skipped_quota"], required: true },
     messageId: String,
     error: String,
   },

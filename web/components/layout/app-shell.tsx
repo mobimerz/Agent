@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { BellIcon, MenuIcon } from "lucide-react";
+import { MenuIcon } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS, isActive } from "./nav-items";
+import { NotificationBell } from "./notification-bell";
 import { UserMenu, type ShellUser } from "./user-menu";
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
@@ -82,12 +83,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
           </Link>
 
           <div className="ml-auto flex items-center gap-1">
-            {/* Real-time unread count arrives in Phase 3 (Change Streams + SSE). */}
-            <Button variant="ghost" size="icon" asChild aria-label="Notifications">
-              <Link href="/notifications">
-                <BellIcon className="size-4" />
-              </Link>
-            </Button>
+            <NotificationBell />
             <ThemeToggle />
             <UserMenu user={user} />
           </div>

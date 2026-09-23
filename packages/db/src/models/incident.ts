@@ -1,4 +1,4 @@
-import { CHECK_TYPES, INCIDENT_STATUSES, SEVERITIES } from "@siteguard/core";
+import { CHECK_REASONS, CHECK_TYPES, INCIDENT_STATUSES, SEVERITIES } from "@siteguard/core";
 import { Schema, model, type InferSchemaType } from "mongoose";
 import { defineModel, type Lean } from "../model-utils";
 
@@ -12,6 +12,27 @@ const noteSchema = new Schema(
   { _id: true },
 );
 
+export const TIMELINE_TYPES = [
+  "opened",
+  "escalated",
+  "deescalated",
+  "reminder",
+  "acknowledged",
+  "resolved",
+  "suppressed",
+  "note",
+] as const;
+
+const timelineSchema = new Schema(
+  {
+    at: { type: Date, default: Date.now },
+    type: { type: String, enum: TIMELINE_TYPES, required: true },
+    message: { type: String, default: "" },
+    by: String,
+  },
+  { _id: false },
+);
+
 const incidentSchema = new Schema(
   {
     siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true },
@@ -21,20 +42,35 @@ const incidentSchema = new Schema(
     /**
      * true while OPEN or ACKNOWLEDGED. Backs the unique partial index that
      * guarantees at most ONE open incident per site + check type.
+     * Keep in sync on every update (the save hook only covers .save()).
      */
     isOpen: { type: Boolean, default: true },
     title: { type: String, required: true },
+    reason: { type: String, enum: CHECK_REASONS },
     message: { type: String, default: "" },
     target: String,
+    /** First failing result of the streak (not the confirmation time). */
     startedAt: { type: Date, required: true },
+    /** Last OK result before the problem started ("last successful check"). */
+    lastOkAt: Date,
     acknowledgedAt: Date,
     acknowledgedBy: String,
     resolvedAt: Date,
+    resolvedBy: String,
     durationSec: Number,
     lastRemindedAt: Date,
     remindersSent: { type: Number, default: 0 },
+    /** Which external channels this incident may use (BLOCKED: Telegram only, no reminders). */
+    policy: {
+      email: { type: Boolean, default: true },
+      telegram: { type: Boolean, default: true },
+      reminders: { type: Boolean, default: true },
+    },
+    /** Alerts were withheld (maintenance window / site flapping). */
+    suppressed: { type: String, enum: ["maintenance", "unstable", null], default: null },
     lastMetrics: Schema.Types.Mixed,
     notes: { type: [noteSchema], default: [] },
+    timeline: { type: [timelineSchema], default: [] },
   },
   { timestamps: true, collection: "incidents" },
 );

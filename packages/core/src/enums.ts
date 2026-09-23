@@ -36,14 +36,28 @@ export type Role = (typeof ROLES)[number];
 
 export const NOTIFICATION_TYPES = [
   "incident_opened",
+  "incident_escalated",
+  "incident_updated",
   "incident_resolved",
   "incident_reminder",
+  "site_unstable",
+  "site_stable",
+  "worker_offline",
+  "worker_online",
   "report",
   "system",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
-export const EMAIL_CATEGORIES = ["alert", "resolved", "reminder", "digest", "report", "invite", "test"] as const;
+export const EMAIL_CATEGORIES = ["alert", "resolved", "reminder", "digest", "report", "invite", "test", "system"] as const;
+
+/** Things that fan out to email / Telegram. */
+export const ALERT_TYPES = ["opened", "escalated", "resolved", "reminder", "unstable", "stable", "worker_offline", "worker_online"] as const;
+export type AlertType = (typeof ALERT_TYPES)[number];
+
+/** Per-channel delivery state of an alert event. */
+export const DELIVERY_STATES = ["pending", "sent", "preview", "grouped", "skipped", "suppressed", "failed", "none"] as const;
+export type DeliveryState = (typeof DELIVERY_STATES)[number];
 export type EmailCategory = (typeof EMAIL_CATEGORIES)[number];
 
 export const REPORT_KINDS = ["morning", "night"] as const;

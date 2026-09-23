@@ -4,6 +4,7 @@ import { DEFAULT_THRESHOLDS } from "@siteguard/core";
 import type { SettingsDoc, SiteLean } from "@siteguard/db";
 import { Types } from "@siteguard/db";
 import pino from "pino";
+import type { NotifyConfig } from "@siteguard/notify";
 import type { CheckContext } from "../src/checks/types";
 
 export type Handler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -58,3 +59,14 @@ export function makeCtx(extra: Partial<CheckContext> = {}): CheckContext {
     ...extra,
   };
 }
+
+/** Preview-mode notify config (no real sends in tests). */
+export const testNotifyConfig: NotifyConfig = {
+  appUrl: "http://localhost:3000",
+  timeZone: "Asia/Kolkata",
+  dryRun: true,
+  fromName: "SiteGuard",
+  fromEmail: "alerts@mycompany.com",
+  envAlertEmails: ["team@mycompany.com"],
+  envTelegramChatIds: ["-1001"],
+};

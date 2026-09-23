@@ -1,15 +1,32 @@
 import { Cron } from "croner";
 import { ACTIVE_CHECK_TYPES } from "@siteguard/core";
 import { connectDb, disconnectDb, ensureIndexes, getSettings } from "@siteguard/db";
+import { createNotifyContext, dispatchPendingAlerts, emailStatus, notifyConfigFromEnv, telegramStatus } from "@siteguard/notify";
 import { env } from "./env";
 import { logger } from "./logger";
+import { checkStability, sendReminders } from "./incidents/engine";
 import { pingExternalHeartbeat, writeHeartbeat } from "./jobs/heartbeat";
 import { Dispatcher, releaseStaleLocks } from "./scheduler/dispatcher";
 import { reconcileJobs } from "./scheduler/reconcile";
+import { getSettingsCached } from "./settings-cache";
 import { WORKER_ID } from "./worker-id";
 
 const crons: Cron[] = [];
-const dispatcher = new Dispatcher(logger);
+const notifyConfig = notifyConfigFromEnv(env);
+const dispatcher = new Dispatcher(logger, notifyConfig);
+
+async function deliverAlerts() {
+  const ctx = await createNotifyContext(notifyConfig, { settings: await getSettingsCached(), log: logger.child({ mod: "alerts" }) });
+  const n = await dispatchPendingAlerts(ctx);
+  if (n.email || n.telegram) logger.debug(n, "alerts dispatched");
+}
+
+async function incidentHousekeeping() {
+  const deps = { settings: await getSettingsCached(), config: notifyConfig, log: logger };
+  const reminders = await sendReminders(deps);
+  const stable = await checkStability(deps);
+  if (reminders || stable) logger.info({ reminders, stable }, "incident housekeeping");
+}
 
 /** Wrap a job so one failure is logged and never crashes the process. */
 function safe(name: string, fn: () => Promise<void>) {
@@ -28,8 +45,12 @@ async function main() {
   const dropped = await ensureIndexes();
   const droppedCount = Object.values(dropped).flat().length;
   if (droppedCount) logger.warn({ dropped }, "dropped stale indexes");
-  await getSettings(); // creates the settings singleton with defaults on first boot
+  const settings = await getSettings(); // creates the settings singleton with defaults on first boot
   logger.info("database ready");
+  const email = emailStatus(notifyConfig, settings);
+  const telegram = telegramStatus(notifyConfig, settings);
+  // Missing keys are fine: channels just stay in preview mode.
+  logger.info({ email: email.mode, telegram: telegram.mode }, email.mode === "live" && telegram.mode === "live" ? "alert channels live" : "alert channels in PREVIEW mode (see /dev/emails, /dev/telegram)");
 
   const released = await releaseStaleLocks();
   if (released) logger.info({ released }, "released locks from a previous run");
@@ -40,6 +61,8 @@ async function main() {
     new Cron("*/1 * * * *", { name: "heartbeat", protect: true }, safe("heartbeat", writeHeartbeat)),
     new Cron("*/5 * * * *", { name: "heartbeat-ping", protect: true }, safe("heartbeat-ping", () => pingExternalHeartbeat(logger))),
     new Cron("*/5 * * * *", { name: "reconcile", protect: true }, safe("reconcile", () => reconcileJobs(logger))),
+    new Cron("*/15 * * * * *", { name: "alerts", protect: true }, safe("alerts", deliverAlerts)),
+    new Cron("30 * * * * *", { name: "incident-housekeeping", protect: true }, safe("incident-housekeeping", incidentHousekeeping)),
   );
   await pingExternalHeartbeat(logger);
 

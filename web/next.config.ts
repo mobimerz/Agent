@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: repoRoot,
   turbopack: { root: repoRoot },
-  transpilePackages: ["@siteguard/core", "@siteguard/db"],
+  transpilePackages: ["@siteguard/core", "@siteguard/db", "@siteguard/emails", "@siteguard/notify"],
   serverExternalPackages: ["mongoose", "mongodb", "pino"],
   poweredByHeader: false,
   typedRoutes: true,

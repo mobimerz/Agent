@@ -128,6 +128,19 @@ export const DEFAULTS = {
   emailReservedForReports: 10,
   /** Above this many alert emails in a day, switch to digest mode. */
   emailDigestAfter: 200,
+  /** Resolve an incident only after this many consecutive OK results (anti-flapping). */
+  resolveAfterOks: 2,
+  /** WARN results in a row before a WARNING incident opens (slow, blocked…). */
+  warnConfirmRuns: 2,
+  /** ≥ N open/resolve transitions within the window → one "unstable" alert, then silence. */
+  flapThreshold: 4,
+  flapWindowMin: 30,
+  /** An unstable site is "stable again" after this long without transitions. */
+  stableAfterMin: 30,
+  /** Web app alerts when the worker heartbeat is older than this. */
+  watchdogStaleMin: 15,
+  /** In digest mode (quota nearly used), batch alert emails at most this often. */
+  digestIntervalMin: 60,
 } as const;
 
 export const RETENTION = {

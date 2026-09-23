@@ -28,6 +28,14 @@ const jobStateSchema = new Schema(
 
     /** Confirmation logic: consecutive FAIL results (reset on OK/WARN). */
     consecutiveFails: { type: Number, default: 0 },
+    /** Consecutive OK results (resolution needs DEFAULTS.resolveAfterOks). */
+    consecutiveOks: { type: Number, default: 0 },
+    /** Consecutive WARN results (WARNING incidents need DEFAULTS.warnConfirmRuns). */
+    consecutiveWarns: { type: Number, default: 0 },
+    /** Start of the current non-OK streak → incident startedAt. */
+    problemSince: Date,
+    /** First OK after a problem → incident resolvedAt (true recovery time). */
+    okSince: Date,
     /** >0 while the next run is a confirmation re-check (1..confirmRetries). */
     retryAttempt: { type: Number, default: 0 },
     /** Set by "Run check now"; honoured even if a run is in progress. */

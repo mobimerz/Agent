@@ -12,7 +12,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatInterval, formatMs, formatPct, formatTime, timeAgo } from "@/lib/format";
+import { listIncidents } from "@/lib/queries/incidents";
 import { getDailyStatus, getJobs, getRecentResults, getResponseSeries, getSite, getUptimeStats } from "@/lib/queries/sites";
+import { IncidentStatusText, SeverityBadge } from "@/components/incidents/severity-badge";
+import Link from "next/link";
+import type { Route } from "next";
+import { formatDuration } from "@siteguard/core";
+import { formatShort } from "@/lib/format";
 import { requireSession, roleOf } from "@/lib/session";
 
 export async function generateMetadata({ params }: PageProps<"/sites/[id]">) {
@@ -44,7 +50,7 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
   const site = await getSite((await params).id);
   if (!site) notFound();
 
-  const [uptimeResults, contentResults, stats, day, week, days, jobs] = await Promise.all([
+  const [uptimeResults, contentResults, stats, day, week, days, jobs, incidents] = await Promise.all([
     getRecentResults(site._id, "uptime", 20),
     getRecentResults(site._id, "content", 10),
     getUptimeStats(site._id),
@@ -52,7 +58,9 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
     getResponseSeries(site._id, "7d"),
     getDailyStatus(site._id, 30),
     getJobs(site._id),
+    listIncidents({ site: String(site._id) }, 50),
   ]);
+  const openIncidents = incidents.filter((i) => i.status !== "RESOLVED");
 
   const id = String(site._id);
   const checks = (site.current?.checks ?? {}) as LatestChecks;
@@ -92,6 +100,25 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
         </div>
       </div>
 
+      {openIncidents.length > 0 && (
+        <Alert className="border-destructive/40 mb-4">
+          <AlertTitle>{openIncidents.length} open incident{openIncidents.length > 1 ? "s" : ""}</AlertTitle>
+          <AlertDescription>
+            <ul className="mt-1 grid gap-1">
+              {openIncidents.map((i) => (
+                <li key={i.id} className="flex flex-wrap items-center gap-2">
+                  <SeverityBadge severity={i.severity} />
+                  <Link href={`/incidents/${i.id}` as Route} className="font-medium underline underline-offset-4">
+                    {i.title}
+                  </Link>
+                  <span className="text-muted-foreground text-xs">since {formatShort(i.startedAt)} · {formatDuration(i.durationSec)}</span>
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {paused && (
         <Alert className="mb-4">
           <AlertTitle>Monitoring paused</AlertTitle>
@@ -118,6 +145,7 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
           <TabsList>
             <TabsTrigger value="uptime">Uptime</TabsTrigger>
             <TabsTrigger value="content">Content</TabsTrigger>
+            <TabsTrigger value="incidents">Incidents{openIncidents.length ? ` (${openIncidents.length})` : ""}</TabsTrigger>
             {FUTURE_TABS.map((t) => (
               <TabsTrigger key={t.value} value={t.value}>
                 {t.label}
@@ -224,6 +252,26 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
               <RecentResultsTable results={contentResults} showResponse={false} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="incidents" className="mt-4">
+          {incidents.length === 0 ? (
+            <div className="text-muted-foreground rounded-xl border border-dashed px-6 py-12 text-center text-sm">No incidents for this site.</div>
+          ) : (
+            <ul className="grid gap-2">
+              {incidents.map((i) => (
+                <li key={i.id}>
+                  <Link href={`/incidents/${i.id}` as Route} className="hover:bg-accent/40 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-3">
+                    <SeverityBadge severity={i.severity} />
+                    <span className="font-medium">{i.title}</span>
+                    <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">{i.message}</span>
+                    <span className="text-muted-foreground text-xs">{formatShort(i.startedAt)} · {formatDuration(i.durationSec)}</span>
+                    <IncidentStatusText status={i.status} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </TabsContent>
 
         {FUTURE_TABS.map((t) => (

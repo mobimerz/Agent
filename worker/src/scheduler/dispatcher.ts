@@ -2,6 +2,7 @@ import { hostname } from "node:os";
 import { Cron } from "croner";
 import type { CheckType } from "@siteguard/core";
 import { JobState, type JobStateLean } from "@siteguard/db";
+import type { NotifyConfig } from "@siteguard/notify";
 import { CHECKS } from "../checks";
 import type { QueueName } from "../checks/types";
 import type { Logger } from "../logger";
@@ -45,7 +46,10 @@ export class Dispatcher {
   private cron: Cron | null = null;
   private ticking = false;
 
-  constructor(private readonly log: Logger) {}
+  constructor(
+    private readonly log: Logger,
+    private readonly config: NotifyConfig,
+  ) {}
 
   start() {
     // Every 3 s: cheap indexed query; keeps "Run check now" snappy.
@@ -62,7 +66,7 @@ export class Dispatcher {
         for (let free = freeSlots(queue); free > 0; free--) {
           const job = await claimNextJob(types);
           if (!job) break;
-          void queue.add(() => runCheckJob(job, { settings, log: this.log }));
+          void queue.add(() => runCheckJob(job, { settings, config: this.config, log: this.log }));
         }
       }
     } catch (err) {

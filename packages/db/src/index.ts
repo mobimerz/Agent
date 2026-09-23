@@ -14,5 +14,7 @@ export * from "./models/job-state";
 export * from "./models/email-log";
 export * from "./models/maintenance-window";
 export * from "./models/invite";
+export * from "./models/alert-event";
+export * from "./models/outbox";
 
 export { default as mongoose, Types } from "mongoose";

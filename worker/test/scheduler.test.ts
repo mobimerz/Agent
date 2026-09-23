@@ -3,7 +3,7 @@ import { CheckResult, getSettings, JobState, jobKeys, requestRunNow, Site, syncS
 import { startTestDb } from "../../packages/db/test/setup-mongo";
 import { claimNextJob } from "../src/scheduler/dispatcher";
 import { runCheckJob } from "../src/scheduler/runner";
-import { silentLog, startServer } from "./helpers";
+import { silentLog, startServer, testNotifyConfig } from "./helpers";
 
 let db: Awaited<ReturnType<typeof startTestDb>>;
 let srv: Awaited<ReturnType<typeof startServer>>;
@@ -42,7 +42,7 @@ async function runOnce(key: string) {
   const job = await claimNextJob(["uptime"]);
   expect(job?.key).toBe(key);
   const settings = await getSettings();
-  const outcome = await runCheckJob(job!, { settings, log: silentLog });
+  const outcome = await runCheckJob(job!, { settings, config: testNotifyConfig, log: silentLog });
   return { outcome, job: (await JobState.findOne({ key }).lean())! };
 }
 
@@ -123,7 +123,7 @@ describe("site health", () => {
     const jobs = [await claimNextJob(["uptime", "content"]), await claimNextJob(["uptime", "content"])];
     expect(jobs.map((j) => j?.checkType).sort()).toEqual(["content", "uptime"]);
     // Both read the site before either writes — the old read-modify-write lost one summary.
-    await Promise.all(jobs.map((j) => runCheckJob(j!, { settings, log: silentLog })));
+    await Promise.all(jobs.map((j) => runCheckJob(j!, { settings, config: testNotifyConfig, log: silentLog })));
     const s = (await Site.findById(site._id).lean())!;
     expect(Object.keys(s.current?.checks ?? {}).sort()).toEqual(["content", "uptime"]);
     expect(s.current?.health).toBe("up");

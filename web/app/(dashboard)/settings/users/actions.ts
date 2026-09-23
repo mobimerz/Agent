@@ -5,7 +5,10 @@ import { z } from "zod";
 import { RETENTION, ROLES } from "@siteguard/core";
 import { Invite, mongoose } from "@siteguard/db";
 import { db } from "@/lib/db";
+import { sendInviteEmail } from "@siteguard/notify";
+import { env } from "@/lib/env";
 import { inviteUrl, newInviteToken } from "@/lib/invites";
+import { notifyContext } from "@/lib/notify";
 import { requireAdmin } from "@/lib/session";
 
 export type ActionResult<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
@@ -51,4 +54,22 @@ export async function revokeInvite(inviteId: string): Promise<ActionResult> {
   await Invite.updateOne({ _id: inviteId, acceptedAt: null }, { $set: { revokedAt: new Date() } });
   revalidatePath("/settings/users");
   return { ok: true, data: undefined };
+}
+
+/** Optional: email the invite link (uses 1 Brevo email; in preview mode it is only rendered). */
+export async function emailInvite(input: { email: string; url: string; role: string }): Promise<ActionResult<{ state: string; previewId?: string }>> {
+  const session = await requireAdmin();
+  const email = z.email().safeParse(input.email.trim().toLowerCase());
+  if (!email.success) return { ok: false, error: "Invalid email" };
+  // Only accept links this app generated.
+  if (!input.url.startsWith(new URL("/invite/", env.APP_URL).toString())) return { ok: false, error: "Invalid invite link" };
+  const res = await sendInviteEmail(await notifyContext(), {
+    to: email.data,
+    inviteUrl: input.url,
+    invitedBy: session.user.name,
+    role: input.role,
+    expiresInDays: RETENTION.inviteDays,
+  });
+  if (res.state === "failed" || res.state === "skipped") return { ok: false, error: [res.error?.message, res.error?.hint].filter(Boolean).join(" — ") };
+  return { ok: true, data: { state: res.state, previewId: res.previewId } };
 }

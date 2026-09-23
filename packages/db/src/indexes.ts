@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { connectDb } from "./connection";
+import { AlertEvent } from "./models/alert-event";
 import { CheckResult } from "./models/check-result";
 import { EmailLog } from "./models/email-log";
 import { Incident } from "./models/incident";
@@ -7,6 +8,7 @@ import { Invite } from "./models/invite";
 import { JobState } from "./models/job-state";
 import { MaintenanceWindow } from "./models/maintenance-window";
 import { Notification } from "./models/notification";
+import { Outbox } from "./models/outbox";
 import { Report } from "./models/report";
 import { Settings } from "./models/settings";
 import { Site } from "./models/site";
@@ -24,6 +26,8 @@ const ALL_MODELS = [
   EmailLog,
   MaintenanceWindow,
   Invite,
+  AlertEvent,
+  Outbox,
 ];
 
 /**

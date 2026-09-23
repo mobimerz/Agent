@@ -1,5 +1,6 @@
 import { DEFAULT_THRESHOLDS, type CheckSummary, type CheckType, type Thresholds } from "@siteguard/core";
 import { CheckResult, isCheckEnabled, JobState, Site, type JobStateLean, type SettingsDoc, type SiteLean } from "@siteguard/db";
+import type { NotifyConfig } from "@siteguard/notify";
 import { CHECKS } from "../checks";
 import type { CheckRunResult } from "../checks/types";
 import { onCheckResult } from "../incidents/hook";
@@ -73,6 +74,7 @@ async function updateSiteCurrent(site: SiteLean, type: CheckType, outcome: Check
 
 export interface RunDeps {
   settings: SettingsDoc;
+  config: NotifyConfig;
   log: Logger;
 }
 
@@ -81,7 +83,7 @@ export interface RunDeps {
  * update the site's denormalized `current`, apply the FAIL-confirmation
  * schedule, release the lock and notify the incident hook. Never throws.
  */
-export async function runCheckJob(job: JobStateLean, { settings, log }: RunDeps): Promise<CheckRunResult | null> {
+export async function runCheckJob(job: JobStateLean, { settings, config, log }: RunDeps): Promise<CheckRunResult | null> {
   const type = job.checkType as CheckType;
   const module = CHECKS[type];
   const startedAt = new Date();
@@ -118,7 +120,13 @@ export async function runCheckJob(job: JobStateLean, { settings, log }: RunDeps)
     // UNKNOWN (couldn't decide) neither confirms nor clears a failure streak.
     const fails = outcome.status === "FAIL" ? prevFails + 1 : outcome.status === "UNKNOWN" ? prevFails : 0;
     const confirmed = fails > retries;
-    const wasConfirmed = prevFails > retries;
+    // Streaks for WARNING incidents and anti-flap resolution. UNKNOWN keeps them unchanged.
+    const s = outcome.status;
+    const prevOks = job.consecutiveOks ?? 0;
+    const oks = s === "OK" ? prevOks + 1 : s === "UNKNOWN" ? prevOks : 0;
+    const warns = s === "WARN" ? (job.consecutiveWarns ?? 0) + 1 : s === "UNKNOWN" ? (job.consecutiveWarns ?? 0) : 0;
+    const problemSince = s === "FAIL" || s === "WARN" ? (job.problemSince ?? startedAt) : s === "OK" ? null : (job.problemSince ?? null);
+    const okSince = s === "OK" ? (prevOks === 0 ? startedAt : (job.okSince ?? startedAt)) : s === "UNKNOWN" ? (job.okSince ?? null) : null;
     const inRetry = outcome.status === "FAIL" && !confirmed;
     const intervalSec = job.intervalSec ?? 300;
     const nextRunAt = inRetry
@@ -151,6 +159,10 @@ export async function runCheckJob(job: JobStateLean, { settings, log }: RunDeps)
           lastStatus: outcome.status,
           lastError: outcome.status === "OK" ? null : outcome.message,
           consecutiveFails: fails,
+          consecutiveOks: oks,
+          consecutiveWarns: warns,
+          problemSince,
+          okSince,
           retryAttempt: inRetry ? fails : 0,
           nextRunAt,
           lockedUntil: new Date(0),
@@ -165,9 +177,10 @@ export async function runCheckJob(job: JobStateLean, { settings, log }: RunDeps)
 
     jobLog.debug({ status: outcome.status, reason: outcome.reason, ms: finishedAt.getTime() - startedAt.getTime() }, outcome.message);
 
-    await onCheckResult({ site, checkType: type, outcome, prevFails, fails, confirmed, wasConfirmed, attempt, log: jobLog }).catch((err: unknown) =>
-      jobLog.error({ err }, "incident hook failed"),
-    );
+    await onCheckResult(
+      { site, checkType: type, outcome, checkedAt: startedAt, fails, oks, warns, confirmed, problemSince, okSince },
+      { settings, config, log: jobLog },
+    ).catch((err: unknown) => jobLog.error({ err }, "incident engine failed"));
     return outcome;
   } catch (err) {
     jobLog.error({ err }, "job failed");
