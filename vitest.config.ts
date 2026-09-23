@@ -9,5 +9,7 @@ export default defineConfig({
     testTimeout: 60_000,
     hookTimeout: 180_000,
     fileParallelism: false,
+    // Worker modules validate env at import; tests never touch this URI (they start their own mongod).
+    env: { NODE_ENV: "test", LOG_LEVEL: "silent", MONGODB_URI: "mongodb://127.0.0.1:1/unused" },
   },
 });

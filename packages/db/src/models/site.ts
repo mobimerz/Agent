@@ -1,4 +1,4 @@
-import { CHECK_STATUSES, FRAMEWORKS, SITE_HEALTH, SITE_STATUSES } from "@siteguard/core";
+import { CHECK_REASONS, CHECK_STATUSES, FRAMEWORKS, SITE_HEALTH, SITE_STATUSES } from "@siteguard/core";
 import { Schema, model, type InferSchemaType } from "mongoose";
 import { defineModel, type Lean } from "../model-utils";
 
@@ -14,6 +14,7 @@ const checkConfig = new Schema(
 const checkSummary = new Schema(
   {
     status: { type: String, enum: CHECK_STATUSES, required: true },
+    reason: { type: String, enum: CHECK_REASONS },
     message: { type: String, default: "" },
     checkedAt: { type: Date, required: true },
   },
@@ -112,6 +113,9 @@ const siteSchema = new Schema(
       type: new Schema(
         {
           health: { type: String, enum: SITE_HEALTH, default: "unknown" },
+          /** Uptime FAIL confirmed by re-checks (drives "down"; Phase 3 opens the incident). */
+          uptimeDown: { type: Boolean, default: false },
+          finalUrl: String,
           lastCheckedAt: Date,
           statusCode: Number,
           responseTimeMs: Number,

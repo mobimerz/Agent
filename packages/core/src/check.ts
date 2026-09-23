@@ -1,8 +1,11 @@
 import type { CheckStatus, CheckType } from "./enums";
+import type { CheckReason } from "./reasons";
 
 /** What every check module in /worker/checks returns. */
 export interface CheckOutcome<M extends Record<string, unknown> = Record<string, unknown>> {
   status: CheckStatus;
+  /** Exact cause, for the UI and alert wording. */
+  reason: CheckReason;
   /** Small numeric/string facts that are charted or compared (responseTimeMs, scores, daysLeft…). */
   metrics: M;
   /** One-line human summary, used in alerts. */
@@ -15,6 +18,7 @@ export interface CheckOutcome<M extends Record<string, unknown> = Record<string,
 
 export interface CheckSummary {
   status: CheckStatus;
+  reason?: CheckReason;
   message: string;
   checkedAt: Date;
 }

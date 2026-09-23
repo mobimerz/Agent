@@ -38,6 +38,48 @@ export const MIN_INTERVALS: Record<CheckType, number> = {
   headers: DAY,
 };
 
+/**
+ * Checks the worker can run today. Grows per build phase; jobs for other
+ * types are kept disabled until their module exists.
+ */
+export const ACTIVE_CHECK_TYPES: readonly CheckType[] = ["uptime", "content"];
+
+/** Phase in which a not-yet-active check type ships (for UI hints). */
+export const CHECK_PHASE: Partial<Record<CheckType, number>> = {
+  ssl: 4,
+  domain: 4,
+  dns: 4,
+  pagespeed: 4,
+  seo: 4,
+  links: 5,
+  form: 5,
+  browser: 5,
+  headers: 5,
+};
+
+/**
+ * High-signal defacement / SEO-spam phrases (matched case-insensitively on
+ * visible text). Kept deliberately specific to avoid false positives; sites
+ * can add their own via `content.extraSpamWords`.
+ */
+export const DEFAULT_SPAM_WORDS = [
+  "hacked by",
+  "h4ck3d",
+  "defaced by",
+  "owned by hacker",
+  "viagra",
+  "cialis",
+  "online casino",
+  "casino online",
+  "slot gacor",
+  "judi online",
+  "situs judi",
+  "togel online",
+  "replica watches",
+  "payday loan",
+  "buy cheap pills",
+];
+
 export const CHECK_LABELS: Record<CheckType, string> = {
   uptime: "Uptime / HTTP",
   content: "Content / Defacement",

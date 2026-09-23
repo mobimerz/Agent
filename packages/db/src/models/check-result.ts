@@ -1,4 +1,4 @@
-import { CHECK_STATUSES, CHECK_TYPES, RETENTION } from "@siteguard/core";
+import { CHECK_REASONS, CHECK_STATUSES, CHECK_TYPES, RETENTION } from "@siteguard/core";
 import { Schema, model, type InferSchemaType } from "mongoose";
 import { DAY_SECONDS, defineModel, type Lean } from "../model-utils";
 
@@ -21,6 +21,7 @@ const checkResultSchema = new Schema(
       required: true,
     },
     status: { type: String, enum: CHECK_STATUSES, required: true },
+    reason: { type: String, enum: CHECK_REASONS, default: "ok" },
     message: { type: String, default: "" },
     durationMs: Number,
     target: String,

@@ -39,7 +39,7 @@ const emailList = z.preprocess(
 
 const baseSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+  LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   MONGODB_URI: z.string().startsWith("mongodb"),
   TIMEZONE: z.string().default(DEFAULT_TIMEZONE),
   APP_URL: z.url().default("http://localhost:3000"),

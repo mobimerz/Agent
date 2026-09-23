@@ -8,6 +8,9 @@ describe("normalizeSiteUrl", () => {
     ["HTTPS://Example.COM/", "https://example.com"],
     ["http://example.co.in/contact#form", "http://example.co.in/contact"],
     ["  https://shop.example.in/?q=1 ", "https://shop.example.in/?q=1"],
+    ["localhost:3000/api/dev/test-target?status=500", "http://localhost:3000/api/dev/test-target?status=500"],
+    ["127.0.0.1:8080", "http://127.0.0.1:8080"],
+    ["localhostshop.com", "https://localhostshop.com"],
   ])("%s → %s", (input, expected) => {
     expect(normalizeSiteUrl(input)).toBe(expected);
   });

@@ -4,7 +4,9 @@
  */
 export function normalizeSiteUrl(input: string): string {
   const raw = input.trim();
-  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  // Real sites default to https; local dev targets (localhost / loopback) to http.
+  const isLocal = /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?([/?#]|$)/i.test(raw);
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `${isLocal ? "http" : "https"}://${raw}`;
   const url = new URL(withScheme);
   url.hash = "";
   url.hostname = url.hostname.toLowerCase();

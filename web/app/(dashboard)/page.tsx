@@ -1,36 +1,37 @@
-import { ActivityIcon, AlertTriangleIcon, ArrowDownCircleIcon, CheckCircle2Icon, GaugeIcon, GlobeIcon } from "lucide-react";
-import { Incident, JobState, Site, jobKeys } from "@siteguard/db";
-import { EmptyState, PageHeader } from "@/components/page-header";
+import Link from "next/link";
+import { AlertTriangleIcon, ArrowDownCircleIcon, CheckCircle2Icon, GaugeIcon, GlobeIcon, PlusIcon } from "lucide-react";
+import { Incident, JobState, jobKeys } from "@siteguard/db";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { PageHeader } from "@/components/page-header";
+import { SitesFilters } from "@/components/sites/sites-filters";
+import { SitesTable } from "@/components/sites/sites-table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db";
+import { getFilterOptions, listSites, parseSiteFilters, type SiteRow } from "@/lib/queries/sites";
 
 export const metadata = { title: "Overview" };
 
-async function getOverview() {
+async function getWorkerOnline() {
   await db();
-  const [counts, openIncidents, heartbeat] = await Promise.all([
-    Site.aggregate<{ total: number; up: number; down: number; avgPerf: number | null }>([
-      { $match: { status: "active" } },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: 1 },
-          up: { $sum: { $cond: [{ $eq: ["$current.health", "up"] }, 1, 0] } },
-          down: { $sum: { $cond: [{ $eq: ["$current.health", "down"] }, 1, 0] } },
-          avgPerf: { $avg: "$current.perfMobile" },
-        },
-      },
-    ]),
-    Incident.countDocuments({ isOpen: true }),
-    JobState.findOne({ key: jobKeys.heartbeat }, { lastRunAt: 1 }).lean(),
-  ]);
-  const c = counts[0] ?? { total: 0, up: 0, down: 0, avgPerf: null };
-  const workerAgeSec = heartbeat?.lastRunAt ? (Date.now() - heartbeat.lastRunAt.getTime()) / 1000 : null;
-  return { ...c, openIncidents, workerOnline: workerAgeSec !== null && workerAgeSec < 180 };
+  const hb = await JobState.findOne({ key: jobKeys.heartbeat }, { lastRunAt: 1 }).lean();
+  return hb?.lastRunAt ? Date.now() - hb.lastRunAt.getTime() < 180_000 : false;
 }
 
-function StatCard({ title, value, icon, tone }: { title: string; value: string | number; icon: React.ReactNode; tone?: string }) {
+function summarize(all: SiteRow[]) {
+  const active = all.filter((r) => !r.paused);
+  const ms = active.map((r) => r.responseTimeMs).filter((v): v is number => v != null);
+  return {
+    total: active.length,
+    up: active.filter((r) => r.status === "up").length,
+    down: active.filter((r) => r.status === "down").length,
+    attention: active.filter((r) => ["degraded", "blocked", "checking"].includes(r.status)).length,
+    avgMs: ms.length ? Math.round(ms.reduce((a, b) => a + b, 0) / ms.length) : null,
+  };
+}
+
+function StatCard({ title, value, icon, tone, hint }: { title: string; value: string | number; icon: React.ReactNode; tone?: string; hint?: string }) {
   return (
     <Card className="gap-2 py-4">
       <CardHeader className="flex flex-row items-center justify-between px-4">
@@ -39,51 +40,67 @@ function StatCard({ title, value, icon, tone }: { title: string; value: string |
       </CardHeader>
       <CardContent className="px-4">
         <div className="text-2xl font-semibold tabular-nums">{value}</div>
+        {hint && <div className="text-muted-foreground mt-0.5 text-xs">{hint}</div>}
       </CardContent>
     </Card>
   );
 }
 
-export default async function OverviewPage() {
-  const o = await getOverview();
+export default async function OverviewPage({ searchParams }: PageProps<"/">) {
+  const filters = parseSiteFilters(await searchParams);
+  const [allRows, rows, options, openIncidents, workerOnline] = await Promise.all([
+    listSites({}),
+    listSites(filters),
+    getFilterOptions(),
+    db().then(() => Incident.countDocuments({ isOpen: true })),
+    getWorkerOnline(),
+  ]);
+  const s = summarize(allRows);
+
+  const headline =
+    s.total === 0
+      ? "No websites monitored yet."
+      : s.down + s.attention === 0
+        ? `All ${s.total} websites running perfectly ✅`
+        : `${s.down + s.attention} website${s.down + s.attention === 1 ? " needs" : "s need"} attention ⚠️`;
 
   return (
     <>
+      <AutoRefresh seconds={30} />
       <PageHeader
         title="Overview"
-        description="Health of all monitored client websites."
+        description={headline}
         actions={
           <Badge variant="outline" className="gap-1.5">
-            <span className={`size-2 rounded-full ${o.workerOnline ? "bg-success" : "bg-destructive"}`} />
-            Worker {o.workerOnline ? "online" : "offline"}
+            <span className={`size-2 rounded-full ${workerOnline ? "bg-success" : "bg-destructive"}`} />
+            Worker {workerOnline ? "online" : "offline"}
           </Badge>
         }
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <StatCard title="Total sites" value={o.total} icon={<GlobeIcon className="size-4" />} />
-        <StatCard title="Up" value={o.up} icon={<CheckCircle2Icon className="size-4" />} tone="text-success" />
-        <StatCard title="Down" value={o.down} icon={<ArrowDownCircleIcon className="size-4" />} tone="text-destructive" />
+        <StatCard title="Total sites" value={s.total} icon={<GlobeIcon className="size-4" />} hint={s.attention ? `${s.attention} degraded / blocked` : undefined} />
+        <StatCard title="Up" value={s.up} icon={<CheckCircle2Icon className="size-4" />} tone="text-success" />
+        <StatCard title="Down" value={s.down} icon={<ArrowDownCircleIcon className="size-4" />} tone={s.down ? "text-destructive" : undefined} />
         <StatCard
           title="Open incidents"
-          value={o.openIncidents}
+          value={openIncidents}
           icon={<AlertTriangleIcon className="size-4" />}
-          tone={o.openIncidents ? "text-warning" : undefined}
+          tone={openIncidents ? "text-warning" : undefined}
+          hint="Incident engine: Phase 3"
         />
-        <StatCard
-          title="Avg performance"
-          value={o.avgPerf == null ? "—" : Math.round(o.avgPerf)}
-          icon={<GaugeIcon className="size-4" />}
-        />
+        <StatCard title="Avg response" value={s.avgMs == null ? "—" : `${s.avgMs} ms`} icon={<GaugeIcon className="size-4" />} hint="Performance score: Phase 4" />
       </div>
 
-      <div className="mt-6">
-        {o.total === 0 ? (
-          <EmptyState icon={<ActivityIcon />} title="No websites yet">
-            Site management and uptime monitoring arrive in Phase 2.
-          </EmptyState>
-        ) : null}
+      <div className="mt-6 mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <SitesFilters clients={options.clients} tags={options.tags} />
+        <Button asChild size="sm" className="self-start sm:self-auto">
+          <Link href="/sites/new">
+            <PlusIcon /> Add site
+          </Link>
+        </Button>
       </div>
+      <SitesTable rows={rows} filters={filters} basePath="/" />
     </>
   );
 }

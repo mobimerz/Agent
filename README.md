@@ -2,7 +2,17 @@
 
 Internal monitoring for client websites — uptime, speed, SEO, SSL, domain, forms and more — with alerts by email (Brevo), Telegram and in-app, plus daily morning/night reports. 100% free stack, self-hosted on one Oracle Cloud Always Free ARM VM.
 
-> Status: **Phase 1** (foundation). The full deployment guide (Oracle VM, Docker, Caddy, Brevo, Telegram, PageSpeed key, backups) lands in Phase 7.
+> Status: **Phase 2** (sites + uptime/content monitoring). The full deployment guide (Oracle VM, Docker, Caddy, Brevo, Telegram, PageSpeed key, backups) lands in Phase 7.
+
+## What works today
+
+- **Sites:** add / edit / pause / delete, per-site check toggles + intervals, slow threshold, important pages, required keyword. Bulk **CSV import** with a preview (valid / invalid with reason / duplicates) and a downloadable template.
+- **Uptime / HTTP check** (every 5 min): real `GET` (never `HEAD`), up to 5 redirects with the full chain + final URL, 30 s timeout, TTFB. Exact failure reason: DNS failure, connection refused, timeout, SSL/TLS error, connection reset, HTTP 4xx, HTTP 5xx, too many redirects, slow (WARN), important page failing (WARN).
+- **Bot protection ≠ downtime:** Cloudflare / Sucuri / Imperva / Wordfence / ModSecurity / Vercel challenges and 429s are reported as **BLOCKED (WARN)** with a whitelist hint, never as DOWN.
+- **Content / defacement check** (every 30 min): required keyword, hack/spam words (visible text only), drastic page-size change vs a moving baseline. If the page is unreachable it reports UNKNOWN (the uptime check owns availability — no double alerts).
+- **False-alarm protection:** a FAIL is re-checked twice, 60 s apart; the site is only marked **Down** after 3 consecutive failures. (`consecutiveFails` / `retryAttempt` live in `jobsState`; Phase 3 plugs the incident engine into `worker/src/incidents/hook.ts`.)
+- **Scheduler:** croner tick every 3 s → atomic job claim in MongoDB → p-queue (HTTP ×10). Restart-safe, no duplicate runs.
+- **Dashboard:** overview + sites list (search, filter by status/client/tag, sort by status/response/name), 24 h sparklines, site detail with response-time chart, uptime % 24 h/7 d/30 d, 30-day status bar, latest result breakdown, **Run check now** (result appears without a page reload).
 
 ## Stack
 
@@ -48,6 +58,24 @@ Open http://localhost:3000 and sign in. Invite teammates from **Settings → Use
 - `pnpm dev:reset` wipes `.dev-data` (stop `pnpm dev` first).
 - `pnpm db:indexes` creates collections and syncs indexes (the worker also does this on start).
 
+### Demo data & failure simulation
+
+```bash
+pnpm seed      # 2 real public sites + 1 site pointing at the dev test target (HTTP 500)
+```
+
+The web app has a **dev-only** simulation endpoint (returns 404 when `NODE_ENV=production`). Add a site with one of these URLs to watch each failure path:
+
+| URL (`http://localhost:3000/api/dev/test-target?…`) | Simulates |
+|---|---|
+| `status=500` (or any code) | Down with HTTP 5xx / 4xx |
+| `delay=5000` | Slow response (WARN above the site's threshold); `delay=40000` → timeout |
+| `body=Hello` | Custom page text — pair with a required keyword to trigger "keyword missing" |
+| `spam=1` | Defaced page ("Hacked by…", casino/pharma spam) |
+| `block=cloudflare` | Cloudflare bot challenge → BLOCKED (WARN), not Down |
+| `redirect=3` / `redirect=9` | Redirect chain / redirect loop (too many redirects) |
+| `size=500` | Page padded to ~500 KB (page-size change) |
+
 ### Useful scripts
 
 | Command | What |
@@ -57,6 +85,7 @@ Open http://localhost:3000 and sign in. Invite teammates from **Settings → Use
 | `pnpm test` | Vitest (starts a throwaway MongoDB replica set) |
 | `pnpm typecheck` / `pnpm lint` | all packages / web |
 | `pnpm create-admin --email … [--name …] [--password …]` | create or promote an admin |
+| `pnpm seed` | add the 3 demo sites (idempotent) |
 
 ### Health endpoint
 
