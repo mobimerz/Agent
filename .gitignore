@@ -1,0 +1,40 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# build output
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# env / secrets
+.env
+.env.*
+!.env.example
+deploy/mongo/keyfile
+
+# local dev data
+.dev-data/
+screenshots/
+backups/
+
+# test / tooling
+coverage/
+playwright-report/
+test-results/
+
+# logs & OS
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# local Claude Code settings
+.claude/settings.local.json

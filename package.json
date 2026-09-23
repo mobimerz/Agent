@@ -1,0 +1,34 @@
+{
+  "name": "siteguard",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n db,web,worker -c magenta,cyan,yellow \"pnpm dev:db\" \"pnpm dev:web\" \"pnpm dev:worker\"",
+    "dev:db": "tsx scripts/dev-mongo.ts",
+    "dev:reset": "tsx scripts/dev-reset.ts",
+    "dev:web": "pnpm --filter @siteguard/web dev",
+    "dev:worker": "pnpm --filter @siteguard/worker dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm --filter @siteguard/web lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:indexes": "tsx scripts/sync-indexes.ts",
+    "create-admin": "pnpm --filter @siteguard/web create-admin"
+  },
+  "devDependencies": {
+    "@siteguard/core": "workspace:*",
+    "@siteguard/db": "workspace:*",
+    "@types/node": "^24.13.6",
+    "concurrently": "^10.0.5",
+    "mongodb": "^7.6.0",
+    "mongodb-memory-server-core": "^11.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
+  }
+}

@@ -1,0 +1,97 @@
+# SiteGuard production stack — Oracle Cloud Always Free ARM VM (linux/arm64).
+#
+#   cd deploy && docker compose --env-file ../.env up -d
+#
+# Phase 1 ships the MongoDB replica set. web, worker, caddy and backup
+# services are added in their phases (see bottom of file).
+
+name: siteguard
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # One-shot: generate the replica-set keyfile once (auth + replSet requires it,
+  # even for a single node). Stored in a named volume, owned by mongod (uid 999).
+  mongo-keyfile:
+    image: mongo:8.0.32-noble
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -euo pipefail
+        if [ ! -s /keyfile/keyfile ]; then
+          head -c 756 /dev/urandom | base64 -w 0 > /keyfile/keyfile
+          echo "generated new keyfile"
+        fi
+        chmod 400 /keyfile/keyfile
+        chown 999:999 /keyfile/keyfile
+    volumes:
+      - mongo-keyfile:/keyfile
+    restart: "no"
+    logging: *logging
+
+  mongo:
+    image: mongo:8.0.32-noble
+    depends_on:
+      mongo-keyfile:
+        condition: service_completed_successfully
+    command:
+      - mongod
+      - --replSet=rs0
+      - --keyFile=/keyfile/keyfile
+      - --bind_ip_all
+      - --wiredTigerCacheSizeGB=1
+      - --setParameter=diagnosticDataCollectionEnabled=false
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?set MONGO_ROOT_USER in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}
+      MONGO_APP_DB: ${MONGO_APP_DB:-siteguard}
+      MONGO_APP_USER: ${MONGO_APP_USER:?set MONGO_APP_USER in .env}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env}
+    volumes:
+      - mongo-data:/data/db
+      - mongo-keyfile:/keyfile:ro
+      # Runs once on an empty data dir (the entrypoint strips --replSet for this phase).
+      - ./mongo/init-app-user.sh:/docker-entrypoint-initdb.d/10-init-app-user.sh:ro
+    # NOT published to the host: reachable only on the internal Docker network.
+    expose:
+      - "27017"
+    networks: [internal]
+    # Initiates rs0 on first boot, then reports healthy once this node is PRIMARY.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet -u "$$MONGO_INITDB_ROOT_USERNAME" -p "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval '
+          try { rs.status().ok } catch (e) {
+            if (e.codeName === "NotYetInitialized") rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "mongo:27017" }] });
+            else throw e;
+          }
+          quit(db.hello().isWritablePrimary ? 0 : 1)'
+      interval: 10s
+      timeout: 10s
+      start_period: 30s
+      retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    restart: unless-stopped
+    logging: *logging
+
+  # ── Added in later phases ────────────────────────────────────────────
+  # web     (Phase 2/7): Next.js standalone, depends_on mongo: service_healthy
+  # worker  (Phase 2/7): Node 24 + Playwright Chromium (arm64)
+  # caddy   (Phase 7):   automatic HTTPS, only service publishing 80/443
+  # backup  (Phase 6):   nightly mongodump --gzip --archive, keep 7 days
+
+volumes:
+  mongo-data:
+  mongo-keyfile:
+
+networks:
+  internal:
+    driver: bridge

@@ -1,0 +1,23 @@
+{
+  "name": "@siteguard/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@siteguard/core": "workspace:*",
+    "mongodb": "^7.6.0",
+    "mongoose": "^9.10.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.6",
+    "mongodb-memory-server-core": "^11.3.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
+  }
+}
