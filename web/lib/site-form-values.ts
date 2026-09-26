@@ -22,6 +22,8 @@ export function toFormValues(site?: SiteLean | null): SiteFormValues {
     notes: site?.notes ?? "",
     checks,
     responseTimeWarnMs: site?.thresholds?.responseTimeWarnMs ? String(site.thresholds.responseTimeWarnMs) : "",
+    minPerformance: site?.thresholds?.minPerformance != null ? String(site.thresholds.minPerformance) : "",
+    minSeo: site?.thresholds?.minSeo != null ? String(site.thresholds.minSeo) : "",
     importantPages: (site?.importantPages ?? []).join("\n"),
     requiredKeyword: site?.content?.requiredKeyword ?? "",
     extraSpamWords: (site?.content?.extraSpamWords ?? []).join(", "),

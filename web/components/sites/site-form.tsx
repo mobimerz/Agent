@@ -30,6 +30,8 @@ export interface SiteFormValues {
   notes: string;
   checks: Record<CheckType, { enabled: boolean; intervalMin: string }>;
   responseTimeWarnMs: string;
+  minPerformance: string;
+  minSeo: string;
   importantPages: string;
   requiredKeyword: string;
   extraSpamWords: string;
@@ -63,7 +65,7 @@ function toInput(v: SiteFormValues): SiteInput {
     checks: Object.fromEntries(
       CHECK_TYPES.map((t) => [t, { enabled: v.checks[t].enabled, intervalSec: v.checks[t].intervalMin ? Math.round(Number(v.checks[t].intervalMin) * 60) : undefined }]),
     ),
-    thresholds: { responseTimeWarnMs: v.responseTimeWarnMs || undefined },
+    thresholds: { responseTimeWarnMs: v.responseTimeWarnMs || undefined, minPerformance: v.minPerformance || undefined, minSeo: v.minSeo || undefined },
     importantPages: splitList(v.importantPages, /\n/),
     content: { requiredKeyword: v.requiredKeyword, extraSpamWords: splitList(v.extraSpamWords) },
     form: { pageUrl: v.formPageUrl, selector: v.formSelector || "form", testSubmission: v.formTestSubmission, successText: "" },
@@ -216,7 +218,7 @@ export function SiteForm({
           <CardTitle>Uptime & content</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <Field id="rt" label="Slow response threshold (ms)" error={err("thresholds")} hint="WARN “slow” above this. Default 3000 ms.">
+          <Field id="rt" label="Slow response threshold (ms)" error={err("thresholds.responseTimeWarnMs")} hint="WARN “slow” above this. Default 3000 ms.">
             <Input id="rt" inputMode="numeric" placeholder="3000" value={v.responseTimeWarnMs} onChange={(e) => set("responseTimeWarnMs", e.target.value.replace(/\D/g, ""))} />
           </Field>
           <Field id="kw" label="Required keyword" error={err("content")} hint="FAIL if this text disappears from the homepage.">
@@ -227,6 +229,21 @@ export function SiteForm({
           </Field>
           <Field id="spam" label="Extra spam / hack words" hint="Comma separated, added to the built-in list.">
             <Textarea id="spam" rows={3} value={v.extraSpamWords} onChange={(e) => set("extraSpamWords", e.target.value)} placeholder="crypto giveaway, cheap followers" />
+          </Field>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>PageSpeed & SEO thresholds</CardTitle>
+          <CardDescription>Alert when the median of the last 3 Lighthouse runs stays below these for 2 runs in a row. Empty = global default.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <Field id="minPerf" label="Minimum performance score (0–100)" error={err("thresholds.minPerformance")} hint="Default 50. Mobile or desktop below this → warning.">
+            <Input id="minPerf" inputMode="numeric" placeholder="50" value={v.minPerformance} onChange={(e) => set("minPerformance", e.target.value.replace(/\D/g, ""))} />
+          </Field>
+          <Field id="minSeo" label="Minimum Lighthouse SEO score (0–100)" error={err("thresholds.minSeo")} hint="Default 80.">
+            <Input id="minSeo" inputMode="numeric" placeholder="80" value={v.minSeo} onChange={(e) => set("minSeo", e.target.value.replace(/\D/g, ""))} />
           </Field>
         </CardContent>
       </Card>

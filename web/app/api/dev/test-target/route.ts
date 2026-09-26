@@ -8,13 +8,16 @@
  *   /api/dev/test-target?block=cloudflare         → Cloudflare challenge (403 + cf-mitigated)
  *   /api/dev/test-target?redirect=3               → 3 redirects then 200 (redirect=9 → loop error)
  *   /api/dev/test-target?size=200                 → pad the page to ~200 KB
+ *   /api/dev/test-target?noindex=meta             → robots meta noindex (WordPress "Discourage search engines")
+ *   /api/dev/test-target?noindex=header           → X-Robots-Tag: noindex header
+ *   /api/dev/test-target?canonical=https://staging.example.com/ → canonical pointing to another domain
  */
 export const dynamic = "force-dynamic";
 
 const DEFAULT_BODY = "Welcome to the SiteGuard Test Target. Book Appointment today.";
 
-function page(title: string, body: string) {
-  return `<!doctype html><html><head><title>${title}</title></head><body><h1>${title}</h1><p>${body}</p></body></html>`;
+function page(title: string, body: string, head = "") {
+  return `<!doctype html><html lang="en"><head><title>${title}</title><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="Local page used to simulate SiteGuard checks.">${head}</head><body><h1>${title}</h1><p>${body}</p></body></html>`;
 }
 
 async function handle(request: Request): Promise<Response> {
@@ -44,14 +47,22 @@ async function handle(request: Request): Promise<Response> {
   }
 
   const status = Math.min(Math.max(Number(q.get("status") ?? 200) || 200, 100), 599);
+  const noindex = q.get("noindex");
+  const canonical = q.get("canonical");
+  const head = [
+    noindex === "meta" ? `<meta name='robots' content='noindex, nofollow' />` : "",
+    canonical ? `<link rel="canonical" href="${esc(canonical)}">` : "",
+  ].join("");
   let html = q.get("spam")
-    ? page("Hacked by Anonymous", "Best online casino bonuses! Buy viagra cheap. Slot gacor hari ini.")
-    : page(status >= 400 ? `Error ${status}` : "SiteGuard Test Target", esc(q.get("body") ?? DEFAULT_BODY));
+    ? page("Hacked by Anonymous", "Best online casino bonuses! Buy viagra cheap. Slot gacor hari ini.", head)
+    : page(status >= 400 ? `Error ${status}` : "SiteGuard Test Target", esc(q.get("body") ?? DEFAULT_BODY), head);
 
   const sizeKb = Math.min(Number(q.get("size") ?? 0) || 0, 5000);
   if (sizeKb > 0) html = html.replace("</body>", `<!-- ${"x".repeat(sizeKb * 1024)} --></body>`);
 
-  return new Response(html, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+  const headers: Record<string, string> = { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" };
+  if (noindex === "header") headers["x-robots-tag"] = "noindex";
+  return new Response(html, { status, headers });
 }
 
 export const GET = handle;

@@ -18,6 +18,13 @@ export interface CheckContext {
 export interface CheckRunResult extends CheckOutcome {
   /** Replaces jobState.data after the run (omit to keep it unchanged). */
   jobData?: Record<string, unknown>;
+  /**
+   * No verdict this time (e.g. PSI rate limited): the result is kept in history,
+   * but `site.current`, streaks and incidents are left untouched. Use with UNKNOWN.
+   */
+  skipped?: boolean;
+  /** Run again after this many seconds instead of the normal interval (e.g. rate-limit backoff). */
+  nextRunInSec?: number;
 }
 
 /** Every module in /worker/checks implements this. */

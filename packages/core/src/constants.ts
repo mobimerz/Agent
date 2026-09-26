@@ -42,15 +42,10 @@ export const MIN_INTERVALS: Record<CheckType, number> = {
  * Checks the worker can run today. Grows per build phase; jobs for other
  * types are kept disabled until their module exists.
  */
-export const ACTIVE_CHECK_TYPES: readonly CheckType[] = ["uptime", "content"];
+export const ACTIVE_CHECK_TYPES: readonly CheckType[] = ["uptime", "content", "ssl", "domain", "dns", "pagespeed", "seo"];
 
 /** Phase in which a not-yet-active check type ships (for UI hints). */
 export const CHECK_PHASE: Partial<Record<CheckType, number>> = {
-  ssl: 4,
-  domain: 4,
-  dns: 4,
-  pagespeed: 4,
-  seo: 4,
   links: 5,
   form: 5,
   browser: 5,
@@ -152,3 +147,31 @@ export const RETENTION = {
 } as const;
 
 export const SECONDS_PER_DAY = DAY;
+
+/** Google PageSpeed Insights (Lighthouse) settings. */
+export const PSI = {
+  endpoint: "https://www.googleapis.com/pagespeedonline/v5/runPagespeed",
+  strategies: ["mobile", "desktop"] as const,
+  /** Lighthouse runs take 10–60 s; PSI itself gives up around 60–90 s. */
+  timeoutMs: 120_000,
+  /** Parallel PSI runs: keyless quota is tiny, so one at a time. */
+  concurrencyNoKey: 1,
+  concurrencyWithKey: 2,
+  /** Minimum gap between two PSI API calls. */
+  minGapMsNoKey: 20_000,
+  minGapMsWithKey: 1_000,
+  /** After a 429, pause every PSI call this long (unless Google sends Retry-After). */
+  rateLimitBackoffSecNoKey: 30 * MIN,
+  rateLimitBackoffSecWithKey: 10 * MIN,
+  /** Scores fluctuate 5–10 points between runs: alert on the median of this many runs… */
+  medianOfRuns: 3,
+  /** …and only after this many consecutive runs with the median below threshold. */
+  confirmRuns: 2,
+} as const;
+export type PsiStrategy = (typeof PSI.strategies)[number];
+
+/** SEO check: WARN results in a row before a WARNING incident (same as PSI, avoids blips during deploys). */
+export const SEO_CONFIRM_RUNS = 2;
+
+/** Domain RDAP/WHOIS answers are cached per registrable domain this long. */
+export const DOMAIN_CACHE_HOURS = 12;

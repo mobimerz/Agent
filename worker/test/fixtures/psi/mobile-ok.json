@@ -1,0 +1,204 @@
+{
+  "captchaResult": "CAPTCHA_NOT_NEEDED",
+  "kind": "pagespeedonline#result",
+  "id": "https://acme.example/",
+  "loadingExperience": {
+    "id": "https://acme.example/",
+    "metrics": {
+      "LARGEST_CONTENTFUL_PAINT_MS": {
+        "percentile": 3100,
+        "category": "AVERAGE"
+      },
+      "INTERACTION_TO_NEXT_PAINT": {
+        "percentile": 210,
+        "category": "FAST"
+      },
+      "CUMULATIVE_LAYOUT_SHIFT_SCORE": {
+        "percentile": 6,
+        "category": "FAST"
+      },
+      "FIRST_CONTENTFUL_PAINT_MS": {
+        "percentile": 1800,
+        "category": "FAST"
+      }
+    },
+    "overall_category": "AVERAGE",
+    "initial_url": "https://acme.example/"
+  },
+  "originLoadingExperience": {
+    "id": "https://acme.example",
+    "metrics": {
+      "LARGEST_CONTENTFUL_PAINT_MS": {
+        "percentile": 2600
+      },
+      "INTERACTION_TO_NEXT_PAINT": {
+        "percentile": 180
+      },
+      "CUMULATIVE_LAYOUT_SHIFT_SCORE": {
+        "percentile": 4
+      }
+    },
+    "overall_category": "AVERAGE"
+  },
+  "lighthouseResult": {
+    "requestedUrl": "https://acme.example/",
+    "finalUrl": "https://acme.example/",
+    "finalDisplayedUrl": "https://acme.example/",
+    "lighthouseVersion": "12.8.2",
+    "userAgent": "Mozilla/5.0 (Linux; Android 11; moto g power (2022)) Chrome-Lighthouse",
+    "fetchTime": "2026-09-24T05:30:00.000Z",
+    "runWarnings": [],
+    "configSettings": {
+      "emulatedFormFactor": "mobile",
+      "formFactor": "mobile",
+      "locale": "en-US"
+    },
+    "categories": {
+      "performance": {
+        "id": "performance",
+        "title": "Performance",
+        "score": 0.42
+      },
+      "accessibility": {
+        "id": "accessibility",
+        "title": "Accessibility",
+        "score": 0.91
+      },
+      "best-practices": {
+        "id": "best-practices",
+        "title": "Best Practices",
+        "score": 0.78
+      },
+      "seo": {
+        "id": "seo",
+        "title": "SEO",
+        "score": 0.92
+      }
+    },
+    "audits": {
+      "first-contentful-paint": {
+        "id": "first-contentful-paint",
+        "title": "First Contentful Paint",
+        "score": 0.6,
+        "numericValue": 2900,
+        "numericUnit": "millisecond",
+        "displayValue": "2.9 s"
+      },
+      "largest-contentful-paint": {
+        "id": "largest-contentful-paint",
+        "title": "Largest Contentful Paint",
+        "score": 0.3,
+        "numericValue": 6100,
+        "numericUnit": "millisecond",
+        "displayValue": "6.1 s"
+      },
+      "total-blocking-time": {
+        "id": "total-blocking-time",
+        "title": "Total Blocking Time",
+        "score": 0.5,
+        "numericValue": 640,
+        "numericUnit": "millisecond",
+        "displayValue": "640 ms"
+      },
+      "cumulative-layout-shift": {
+        "id": "cumulative-layout-shift",
+        "title": "Cumulative Layout Shift",
+        "score": 0.9,
+        "numericValue": 0.08,
+        "numericUnit": "unitless",
+        "displayValue": "0.08"
+      },
+      "speed-index": {
+        "id": "speed-index",
+        "title": "Speed Index",
+        "score": 0.5,
+        "numericValue": 5200,
+        "numericUnit": "millisecond",
+        "displayValue": "5.2 s"
+      },
+      "server-response-time": {
+        "id": "server-response-time",
+        "title": "Initial server response time was short",
+        "score": 1,
+        "numericValue": 420,
+        "numericUnit": "millisecond",
+        "displayValue": "Root document took 420 ms",
+        "metricSavings": {
+          "FCP": 0,
+          "LCP": 0
+        }
+      },
+      "render-blocking-resources": {
+        "id": "render-blocking-resources",
+        "title": "Eliminate render-blocking resources",
+        "score": 0.2,
+        "displayValue": "Potential savings of 1,230 ms",
+        "details": {
+          "type": "opportunity",
+          "overallSavingsMs": 1230,
+          "items": [
+            {
+              "url": "https://acme.example/wp-content/themes/x/style.css",
+              "wastedMs": 780
+            }
+          ]
+        },
+        "metricSavings": {
+          "FCP": 1230,
+          "LCP": 1230
+        }
+      },
+      "uses-optimized-images": {
+        "id": "uses-optimized-images",
+        "title": "Efficiently encode images",
+        "score": 0.4,
+        "displayValue": "Potential savings of 412 KiB",
+        "details": {
+          "type": "opportunity",
+          "overallSavingsMs": 860,
+          "overallSavingsBytes": 421888,
+          "items": []
+        },
+        "metricSavings": {
+          "LCP": 860
+        }
+      },
+      "unused-javascript": {
+        "id": "unused-javascript",
+        "title": "Reduce unused JavaScript",
+        "score": 0.5,
+        "displayValue": "Potential savings of 180 KiB",
+        "details": {
+          "type": "opportunity",
+          "overallSavingsMs": 450,
+          "items": []
+        },
+        "metricSavings": {
+          "LCP": 450
+        }
+      },
+      "font-display": {
+        "id": "font-display",
+        "title": "Ensure text remains visible during webfont load",
+        "score": 1,
+        "details": {
+          "type": "table",
+          "items": []
+        }
+      },
+      "document-title": {
+        "id": "document-title",
+        "title": "Document has a <title> element",
+        "score": 1
+      }
+    },
+    "timing": {
+      "total": 12345
+    }
+  },
+  "analysisUTCTimestamp": "2026-09-24T05:30:00.000Z",
+  "version": {
+    "major": 1,
+    "minor": 0
+  }
+}

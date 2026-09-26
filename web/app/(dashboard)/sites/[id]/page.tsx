@@ -13,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatInterval, formatMs, formatPct, formatTime, timeAgo } from "@/lib/format";
 import { listIncidents } from "@/lib/queries/incidents";
+import { getJobData, getLatestVerdict, getPsiHistory } from "@/lib/queries/checks";
+import { DnsCard, DomainCard, PerformancePanel, SeoPanel, SslCard } from "@/components/sites/phase4-panels";
 import { getDailyStatus, getJobs, getRecentResults, getResponseSeries, getSite, getUptimeStats } from "@/lib/queries/sites";
 import { IncidentStatusText, SeverityBadge } from "@/components/incidents/severity-badge";
 import Link from "next/link";
@@ -27,9 +29,6 @@ export async function generateMetadata({ params }: PageProps<"/sites/[id]">) {
 }
 
 const FUTURE_TABS: { value: string; label: string; types: CheckType[] }[] = [
-  { value: "performance", label: "Performance", types: ["pagespeed"] },
-  { value: "seo", label: "SEO", types: ["seo"] },
-  { value: "ssl", label: "SSL & Domain", types: ["ssl", "domain", "dns"] },
   { value: "forms", label: "Forms", types: ["form"] },
   { value: "security", label: "Security", types: ["headers"] },
   { value: "screenshots", label: "Screenshots", types: ["browser"] },
@@ -50,7 +49,7 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
   const site = await getSite((await params).id);
   if (!site) notFound();
 
-  const [uptimeResults, contentResults, stats, day, week, days, jobs, incidents] = await Promise.all([
+  const [uptimeResults, contentResults, stats, day, week, days, jobs, incidents, psi, psiHistory, seo, ssl, domain, dns, dnsJob] = await Promise.all([
     getRecentResults(site._id, "uptime", 20),
     getRecentResults(site._id, "content", 10),
     getUptimeStats(site._id),
@@ -59,7 +58,16 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
     getDailyStatus(site._id, 30),
     getJobs(site._id),
     listIncidents({ site: String(site._id) }, 50),
+    getLatestVerdict(site._id, "pagespeed"),
+    getPsiHistory(site._id),
+    getLatestVerdict(site._id, "seo"),
+    getLatestVerdict(site._id, "ssl"),
+    getLatestVerdict(site._id, "domain"),
+    getLatestVerdict(site._id, "dns"),
+    getJobData(site._id, "dns"),
   ]);
+  const minPerformance = site.thresholds?.minPerformance ?? DEFAULT_THRESHOLDS.minPerformance;
+  const minSeo = site.thresholds?.minSeo ?? DEFAULT_THRESHOLDS.minSeo;
   const openIncidents = incidents.filter((i) => i.status !== "RESOLVED");
 
   const id = String(site._id);
@@ -70,6 +78,7 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
   const slowMs = site.thresholds?.responseTimeWarnMs ?? DEFAULT_THRESHOLDS.responseTimeWarnMs;
   const uptimeJob = jobs.get("uptime");
   const paused = site.status === "paused";
+  const enabled = (t: CheckType) => !paused && site.checks?.[t]?.enabled !== false;
 
   return (
     <>
@@ -145,6 +154,9 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
           <TabsList>
             <TabsTrigger value="uptime">Uptime</TabsTrigger>
             <TabsTrigger value="content">Content</TabsTrigger>
+            <TabsTrigger value="performance">Performance</TabsTrigger>
+            <TabsTrigger value="seo">SEO</TabsTrigger>
+            <TabsTrigger value="ssl">SSL, Domain & DNS</TabsTrigger>
             <TabsTrigger value="incidents">Incidents{openIncidents.length ? ` (${openIncidents.length})` : ""}</TabsTrigger>
             {FUTURE_TABS.map((t) => (
               <TabsTrigger key={t.value} value={t.value}>
@@ -252,6 +264,35 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
               <RecentResultsTable results={contentResults} showResponse={false} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="performance" className="mt-4 grid gap-4">
+          {enabled("pagespeed") && (
+            <div className="flex justify-end">
+              <RunCheckButton siteId={id} type="pagespeed" />
+            </div>
+          )}
+          <PerformancePanel latest={psi.result} skippedAfter={psi.skippedAfter} history={psiHistory} minPerformance={minPerformance} minSeo={minSeo} />
+        </TabsContent>
+
+        <TabsContent value="seo" className="mt-4 grid gap-4">
+          {enabled("seo") && (
+            <div className="flex justify-end">
+              <RunCheckButton siteId={id} type="seo" />
+            </div>
+          )}
+          <SeoPanel latest={seo.result} />
+        </TabsContent>
+
+        <TabsContent value="ssl" className="mt-4 grid gap-4">
+          <div className="flex flex-wrap justify-end gap-2">
+            {enabled("ssl") && <RunCheckButton siteId={id} type="ssl" />}
+            {enabled("domain") && <RunCheckButton siteId={id} type="domain" />}
+            {enabled("dns") && <RunCheckButton siteId={id} type="dns" />}
+          </div>
+          <SslCard latest={ssl.result} />
+          <DomainCard latest={domain.result} />
+          <DnsCard siteId={id} latest={dns.result} jobData={dnsJob} />
         </TabsContent>
 
         <TabsContent value="incidents" className="mt-4">

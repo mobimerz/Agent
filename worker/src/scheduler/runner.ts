@@ -51,6 +51,18 @@ async function updateSiteCurrent(site: SiteLean, type: CheckType, outcome: Check
     set["current.responseTimeMs"] = { $literal: outcome.metrics.responseTimeMs ?? null };
     set["current.finalUrl"] = { $literal: (outcome.details?.finalUrl as string | undefined) ?? null };
   }
+  // Headline numbers for the overview (UNKNOWN keeps the last known value).
+  if (outcome.status !== "UNKNOWN") {
+    const m = outcome.metrics as Record<string, unknown>;
+    const n = (v: unknown) => ({ $literal: typeof v === "number" ? v : null });
+    if (type === "pagespeed") {
+      set["current.perfMobile"] = n(m.perfMobile);
+      set["current.perfDesktop"] = n(m.perfDesktop);
+      set["current.seoScore"] = n(m.seoMobile);
+    }
+    if (type === "ssl") set["current.sslDaysLeft"] = n(m.daysLeft);
+    if (type === "domain") set["current.domainDaysLeft"] = n(m.daysLeft);
+  }
 
   const statuses = { $map: { input: { $objectToArray: { $ifNull: ["$current.checks", {}] } }, in: "$$this.v.status" } };
   await Site.collection.updateOne({ _id: site._id }, [
@@ -70,6 +82,45 @@ async function updateSiteCurrent(site: SiteLean, type: CheckType, outcome: Check
       },
     },
   ]);
+}
+
+/**
+ * A run without a verdict (e.g. PSI rate limited): keep it in history, schedule
+ * the retry, but leave site.current, streaks and incidents exactly as they were.
+ */
+async function recordSkipped(job: JobStateLean, siteId: SiteLean["_id"], type: CheckType, outcome: CheckRunResult, startedAt: Date, finishedAt: Date, log: Logger): Promise<CheckRunResult> {
+  const intervalSec = job.intervalSec ?? 300;
+  const delaySec = outcome.nextRunInSec ?? intervalSec;
+  await CheckResult.create({
+    checkedAt: startedAt,
+    meta: { siteId, checkType: type },
+    status: outcome.status,
+    reason: outcome.reason,
+    message: outcome.message,
+    durationMs: finishedAt.getTime() - startedAt.getTime(),
+    attempt: 0,
+    skipped: true,
+    metrics: outcome.metrics,
+    details: outcome.details,
+  });
+  await JobState.updateOne(
+    { _id: job._id, lockedBy: WORKER_ID },
+    {
+      $set: {
+        lastRunAt: startedAt,
+        lastFinishedAt: finishedAt,
+        lastDurationMs: finishedAt.getTime() - startedAt.getTime(),
+        lastError: outcome.message,
+        nextRunAt: new Date(finishedAt.getTime() + delaySec * 1000),
+        lockedUntil: new Date(0),
+        lockedBy: null,
+        ...(outcome.jobData ? { data: outcome.jobData } : {}),
+      },
+      $inc: { runCount: 1 },
+    },
+  );
+  log.info({ reason: outcome.reason, retryInSec: delaySec }, outcome.message);
+  return outcome;
 }
 
 export interface RunDeps {
@@ -114,6 +165,8 @@ export async function runCheckJob(job: JobStateLean, { settings, config, log }: 
     }
 
     const finishedAt = new Date();
+    if (outcome.skipped) return await recordSkipped(job, site._id, type, outcome, startedAt, finishedAt, jobLog);
+
     const retries = settings.alerts?.confirmRetries ?? 2;
     const retryDelaySec = settings.alerts?.confirmRetryDelaySec ?? 60;
     const prevFails = job.consecutiveFails ?? 0;
@@ -131,7 +184,9 @@ export async function runCheckJob(job: JobStateLean, { settings, config, log }: 
     const intervalSec = job.intervalSec ?? 300;
     const nextRunAt = inRetry
       ? new Date(finishedAt.getTime() + retryDelaySec * 1000)
-      : new Date(finishedAt.getTime() + intervalSec * 1000 + jitterMs(intervalSec));
+      : outcome.nextRunInSec
+        ? new Date(finishedAt.getTime() + outcome.nextRunInSec * 1000)
+        : new Date(finishedAt.getTime() + intervalSec * 1000 + jitterMs(intervalSec));
     const attempt = job.retryAttempt ?? 0;
 
     await CheckResult.create({

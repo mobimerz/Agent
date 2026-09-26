@@ -1,0 +1,53 @@
+{
+  "rdapConformance": [
+    "rdap_level_0"
+  ],
+  "objectClassName": "domain",
+  "handle": "D414400000087654321-IN",
+  "ldhName": "client.co.in",
+  "events": [
+    {
+      "eventAction": "registration",
+      "eventDate": "2021-01-20T00:00:00.000Z"
+    },
+    {
+      "eventAction": "expiration",
+      "eventDate": "2026-09-29T00:00:00.000Z"
+    }
+  ],
+  "entities": [
+    {
+      "objectClassName": "entity",
+      "roles": [
+        "registrar"
+      ],
+      "vcardArray": [
+        "vcard",
+        [
+          [
+            "version",
+            {},
+            "text",
+            "4.0"
+          ],
+          [
+            "fn",
+            {},
+            "text",
+            "GoDaddy.com, LLC"
+          ]
+        ]
+      ]
+    }
+  ],
+  "nameservers": [
+    {
+      "objectClassName": "nameserver",
+      "ldhName": "kate.ns.cloudflare.com"
+    },
+    {
+      "objectClassName": "nameserver",
+      "ldhName": "rob.ns.cloudflare.com"
+    }
+  ]
+}

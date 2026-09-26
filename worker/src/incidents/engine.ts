@@ -1,6 +1,8 @@
 import {
   CHECK_LABELS,
   DEFAULTS,
+  PSI,
+  SEO_CONFIRM_RUNS,
   formatDuration,
   type AlertData,
   type AlertType,
@@ -22,6 +24,8 @@ export interface Problem {
   reminders: boolean;
   /** Bypass email grouping/digest. */
   priority?: boolean;
+  /** WARN runs in a row before opening (overrides settings.alerts.warnConfirmRuns for this check). */
+  confirmRuns?: number;
 }
 
 const RANK: Record<Severity, number> = { INFO: 0, WARNING: 1, CRITICAL: 2 };
@@ -42,6 +46,41 @@ export function classify(type: CheckType, o: Pick<CheckRunResult, "status" | "re
     if (o.reason === "spam_detected") return { severity: "CRITICAL", title: "Possible hacked site — spam/hack content found", ...loud, priority: true };
     if (o.reason === "keyword_missing") return { severity: "WARNING", title: "Required keyword missing", ...loud };
     if (o.reason === "size_changed") return { severity: "INFO", title: "Page size changed drastically", email: false, telegram: false, reminders: false };
+  }
+  // Loud but no 2-hourly reminders: these need a fix, not someone woken up again.
+  const noRemind = { email: true, telegram: true, reminders: false };
+  if (type === "ssl") {
+    if (o.reason === "ssl_expired") return { severity: "CRITICAL", title: "SSL certificate expired", ...loud };
+    if (o.reason === "ssl_hostname") return { severity: "CRITICAL", title: "SSL certificate hostname mismatch", ...loud };
+    if (o.reason === "ssl_untrusted") return { severity: "CRITICAL", title: "Untrusted SSL certificate", ...loud };
+    if (o.reason === "ssl_expiring") {
+      return o.status === "FAIL"
+        ? { severity: "CRITICAL", title: "SSL certificate expires within days", ...loud }
+        : { severity: "WARNING", title: "SSL certificate expiring soon", ...noRemind };
+    }
+    if (o.reason === "ssl_chain") return { severity: "WARNING", title: "Incomplete SSL certificate chain", ...noRemind };
+    if (o.reason === "no_https") return { severity: "WARNING", title: "HTTPS not available", ...noRemind };
+  }
+  if (type === "domain") {
+    if (o.reason === "domain_expired") return { severity: "CRITICAL", title: "Domain expired", ...loud, priority: true };
+    if (o.status === "FAIL") return { severity: "CRITICAL", title: "Domain expires within days", ...loud };
+    return { severity: "WARNING", title: "Domain expiring soon", ...noRemind };
+  }
+  if (type === "dns" && o.reason === "dns_changed") {
+    // A DNS change is a fact, not a flaky reading: alert on the first run.
+    return { severity: "WARNING", title: "DNS records changed", ...noRemind, confirmRuns: 1 };
+  }
+  if (type === "pagespeed") {
+    // The check already alerts on the median of the last 3 runs; plus 2 runs in a row here.
+    const title = o.reason === "low_seo" ? "Lighthouse SEO score below threshold" : "PageSpeed performance below threshold";
+    return { severity: "WARNING", title, ...noRemind, confirmRuns: PSI.confirmRuns };
+  }
+  if (type === "seo") {
+    if (o.status === "FAIL") {
+      const title = o.reason === "robots_blocked" ? "robots.txt blocks search engines" : o.reason === "canonical_mismatch" ? "Canonical URL points to another domain" : "Site hidden from Google (noindex)";
+      return { severity: "WARNING", title, ...noRemind };
+    }
+    return { severity: "INFO", title: "On-page SEO issues", email: false, telegram: false, reminders: false, confirmRuns: SEO_CONFIRM_RUNS };
   }
   // Checks added in later phases fall back to: FAIL → WARNING, WARN → INFO (refined per check then).
   return o.status === "FAIL"
@@ -169,7 +208,7 @@ export async function processCheckEvent(ev: CheckEvent, deps: EngineDeps): Promi
   const warnRuns = deps.settings.alerts?.warnConfirmRuns ?? DEFAULTS.warnConfirmRuns;
   const resolveAfter = deps.settings.alerts?.resolveAfterOks ?? DEFAULTS.resolveAfterOks;
 
-  const qualifies = problem ? (outcome.status === "FAIL" ? ev.confirmed : ev.warns >= warnRuns) : false;
+  const qualifies = problem ? (outcome.status === "FAIL" ? ev.confirmed : ev.warns >= (problem.confirmRuns ?? warnRuns)) : false;
 
   // ── Healthy → maybe resolve
   if (!problem) {

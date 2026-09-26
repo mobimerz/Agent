@@ -1,7 +1,8 @@
 /**
- * Seed 3 demo sites (idempotent — safe to run again):
+ * Seed 4 demo sites (idempotent — safe to run again):
  *   - 2 real public sites (healthy path)
  *   - 1 site pointing at the dev test target returning HTTP 500 (failure path)
+ *   - 1 dev test target with SEO problems (noindex + staging canonical)
  *
  *   pnpm seed
  */
@@ -37,6 +38,13 @@ const DEMO_SITES: SiteInput[] = [
     clientName: "Test Lab",
     tags: ["demo", "test"],
     notes: "Dev test target — fails on purpose so the failure path (re-checks → DOWN) is visible. Needs `pnpm dev` running.",
+  },
+  {
+    name: "SEO Broken Demo (noindex)",
+    url: `${appUrl}/api/dev/test-target?noindex=meta&canonical=https://staging.example.com/`,
+    clientName: "Test Lab",
+    tags: ["demo", "test"],
+    notes: "Dev test target with the classic launch mistakes: robots noindex + canonical to a staging domain. Needs `pnpm dev` running.",
   },
 ];
 

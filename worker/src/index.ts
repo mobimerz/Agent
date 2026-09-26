@@ -39,10 +39,29 @@ function safe(name: string, fn: () => Promise<void>) {
   };
 }
 
+/**
+ * `pnpm dev` starts db, web and worker together: the replica set may still be
+ * electing its primary ("not primary") for a few seconds. Retry instead of dying.
+ */
+async function waitForWritableDb<T>(fn: () => Promise<T>, timeoutMs = 90_000): Promise<T> {
+  const started = Date.now();
+  for (;;) {
+    try {
+      return await fn();
+    } catch (err) {
+      const e = err as { codeName?: string; name?: string };
+      const transient = e.codeName === "NotWritablePrimary" || e.codeName === "NotPrimaryNoSecondaryOk" || e.name === "MongoServerSelectionError";
+      if (!transient || Date.now() - started > timeoutMs) throw err;
+      logger.info("waiting for MongoDB to become primary…");
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+}
+
 async function main() {
   logger.info({ workerId: WORKER_ID, tz: env.TIMEZONE }, "worker starting");
   await connectDb(env.MONGODB_URI);
-  const dropped = await ensureIndexes();
+  const dropped = await waitForWritableDb(ensureIndexes);
   const droppedCount = Object.values(dropped).flat().length;
   if (droppedCount) logger.warn({ dropped }, "dropped stale indexes");
   const settings = await getSettings(); // creates the settings singleton with defaults on first boot

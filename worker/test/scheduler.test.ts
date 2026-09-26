@@ -51,13 +51,15 @@ describe("syncSiteJobs", () => {
     const site = await Site.create({ name: "A", url: "https://a.example.com", checks: { content: { enabled: false } } });
     await syncSiteJobs(site.toObject());
     const jobs = await JobState.find({ siteId: site._id }).lean();
-    expect(jobs.map((j) => j.checkType)).toEqual(["uptime"]);
-    expect(jobs[0]!.intervalSec).toBe(300);
+    // content is off for this site; links/form/browser/headers aren't implemented yet (Phase 5).
+    expect(jobs.map((j) => j.checkType).sort()).toEqual(["dns", "domain", "pagespeed", "seo", "ssl", "uptime"]);
+    expect(jobs.find((j) => j.checkType === "uptime")!.intervalSec).toBe(300);
+    expect(jobs.find((j) => j.checkType === "pagespeed")!.intervalSec).toBe(12 * 3600);
 
     site.status = "paused";
     await site.save();
     await syncSiteJobs(site.toObject());
-    expect((await JobState.findOne({ siteId: site._id }).lean())!.enabled).toBe(false);
+    expect(await JobState.countDocuments({ siteId: site._id, enabled: true })).toBe(0);
   });
 
   it("uses the per-site interval override", async () => {

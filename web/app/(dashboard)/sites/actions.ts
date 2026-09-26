@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { ACTIVE_CHECK_TYPES, siteInputSchema, type CheckType, type SiteInput } from "@siteguard/core";
-import { deleteSiteCascade, getSettings, mongoose, requestRunNow, Site, syncSiteJobs } from "@siteguard/db";
+import { deleteSiteCascade, getSettings, Incident, JobState, jobKeys, mongoose, requestRunNow, Site, syncSiteJobs } from "@siteguard/db";
 import { parseSitesCsv, type ImportPreview } from "@/lib/csv-import";
 import { db } from "@/lib/db";
 import { requireAdmin, requireSession } from "@/lib/session";
@@ -101,6 +101,42 @@ export async function runCheckNow(id: string, type: CheckType): Promise<ActionRe
   const requestedAt = await requestRunNow(site._id, type);
   if (!requestedAt) return { ok: false, error: "This check is disabled for the site." };
   return { ok: true, data: { requestedAt: requestedAt.toISOString() } };
+}
+
+/**
+ * "Accept this change": the DNS records seen on the last run become the new
+ * baseline, the open DNS incident (if any) is resolved by the user, and the
+ * check re-runs right away to confirm.
+ */
+export async function acceptDnsChange(id: string): Promise<ActionResult> {
+  const session = await requireSession();
+  if (!mongoose.isValidObjectId(id)) return { ok: false, error: "Site not found" };
+  await db();
+  const siteId = new mongoose.Types.ObjectId(id);
+  const key = jobKeys.check(id, "dns");
+  const job = await JobState.findOne({ key }, { data: 1 }).lean();
+  const data = (job?.data ?? {}) as { observed?: unknown; observedAt?: string };
+  if (!data.observed) return { ok: false, error: "No DNS records observed yet — run the DNS check first." };
+
+  const now = new Date();
+  await JobState.updateOne({ key }, { $set: { "data.baseline": data.observed, "data.baselineAt": now.toISOString(), "data.pending": [], "data.acceptedBy": session.user.name } });
+
+  const open = await Incident.findOne({ siteId, checkType: "dns", isOpen: true }).lean();
+  if (open) {
+    const durationSec = Math.round((now.getTime() - open.startedAt.getTime()) / 1000);
+    await Incident.updateOne(
+      { _id: open._id, isOpen: true },
+      {
+        $set: { status: "RESOLVED", isOpen: false, resolvedAt: now, durationSec, resolvedBy: session.user.name },
+        $push: { timeline: { at: now, type: "resolved", message: "DNS change accepted as the new baseline", by: session.user.name } },
+      },
+    );
+    await Site.updateOne({ _id: siteId }, { $set: { "current.openIncidents": await Incident.countDocuments({ siteId, isOpen: true }) } });
+  }
+  await requestRunNow(siteId, "dns");
+  revalidateSites(id);
+  revalidatePath("/incidents");
+  return { ok: true, data: undefined };
 }
 
 // ─── CSV import ──────────────────────────────────────────────────────

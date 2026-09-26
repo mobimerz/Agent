@@ -1,0 +1,121 @@
+{
+  "objectClassName": "domain",
+  "handle": "2336799_DOMAIN_COM-VRSN",
+  "ldhName": "ACMEDENTAL.COM",
+  "links": [
+    {
+      "value": "https://rdap.verisign.com/com/v1/domain/ACMEDENTAL.COM",
+      "rel": "self",
+      "href": "https://rdap.verisign.com/com/v1/domain/ACMEDENTAL.COM",
+      "type": "application/rdap+json"
+    },
+    {
+      "value": "https://rdap.godaddy.com/v1/domain/ACMEDENTAL.COM",
+      "rel": "related",
+      "href": "https://rdap.godaddy.com/v1/domain/ACMEDENTAL.COM",
+      "type": "application/rdap+json"
+    }
+  ],
+  "status": [
+    "client delete prohibited",
+    "client transfer prohibited"
+  ],
+  "entities": [
+    {
+      "objectClassName": "entity",
+      "handle": "146",
+      "roles": [
+        "registrar"
+      ],
+      "publicIds": [
+        {
+          "type": "IANA Registrar ID",
+          "identifier": "146"
+        }
+      ],
+      "vcardArray": [
+        "vcard",
+        [
+          [
+            "version",
+            {},
+            "text",
+            "4.0"
+          ],
+          [
+            "fn",
+            {},
+            "text",
+            "GoDaddy.com, LLC"
+          ]
+        ]
+      ],
+      "entities": [
+        {
+          "objectClassName": "entity",
+          "roles": [
+            "abuse"
+          ],
+          "vcardArray": [
+            "vcard",
+            [
+              [
+                "version",
+                {},
+                "text",
+                "4.0"
+              ],
+              [
+                "fn",
+                {},
+                "text",
+                ""
+              ],
+              [
+                "tel",
+                {
+                  "type": "voice"
+                },
+                "uri",
+                "tel:480-624-2505"
+              ]
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "eventAction": "registration",
+      "eventDate": "2015-03-10T08:12:33Z"
+    },
+    {
+      "eventAction": "expiration",
+      "eventDate": "2027-03-10T08:12:33Z"
+    },
+    {
+      "eventAction": "last update of RDAP database",
+      "eventDate": "2026-09-24T05:00:00Z"
+    }
+  ],
+  "secureDNS": {
+    "delegationSigned": false
+  },
+  "nameservers": [
+    {
+      "objectClassName": "nameserver",
+      "ldhName": "NS1.EXAMPLE-HOST.COM"
+    },
+    {
+      "objectClassName": "nameserver",
+      "ldhName": "NS2.EXAMPLE-HOST.COM"
+    }
+  ],
+  "rdapConformance": [
+    "rdap_level_0",
+    "icann_rdap_technical_implementation_guide_0",
+    "icann_rdap_response_profile_0"
+  ],
+  "notices": []
+}

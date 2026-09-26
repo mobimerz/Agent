@@ -7,3 +7,5 @@ export * from "./time";
 export * from "./health";
 export * from "./alerts";
 export * from "./schemas/site";
+export * from "./domain";
+export * from "./seo";

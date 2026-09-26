@@ -11,6 +11,8 @@ import type { ResultRow } from "@/lib/queries/sites";
 
 const POLL_MS = 1500;
 const MAX_WAIT_MS = 120_000;
+/** Two Lighthouse runs (mobile + desktop) plus keyless spacing take minutes. */
+const MAX_WAIT_PSI_MS = 6 * 60_000;
 
 /**
  * Queues an immediate run, polls for the new result, shows it in a toast and
@@ -34,7 +36,8 @@ export function RunCheckButton({ siteId, type, size = "sm", variant = "outline" 
     const started = Date.now();
     const after = encodeURIComponent(res.data.requestedAt);
 
-    while (!cancelled.current && Date.now() - started < MAX_WAIT_MS) {
+    const maxWait = type === "pagespeed" ? MAX_WAIT_PSI_MS : MAX_WAIT_MS;
+    while (!cancelled.current && Date.now() - started < maxWait) {
       await new Promise((r) => setTimeout(r, POLL_MS));
       const r = await fetch(`/api/sites/${siteId}/latest?type=${type}&after=${after}`, { cache: "no-store" });
       if (r.status === 204) continue;

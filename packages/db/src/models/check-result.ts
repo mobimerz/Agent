@@ -27,6 +27,8 @@ const checkResultSchema = new Schema(
     target: String,
     /** 0 = scheduled run, 1..n = confirmation re-check after a FAIL. */
     attempt: { type: Number, default: 0 },
+    /** Run did not produce a verdict (e.g. PSI rate limited): kept for history, ignored by charts/alerts. */
+    skipped: { type: Boolean, default: undefined },
     metrics: { type: Schema.Types.Mixed, default: {} },
     details: Schema.Types.Mixed,
   },

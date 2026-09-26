@@ -2,7 +2,7 @@
 
 Internal monitoring for client websites — uptime, speed, SEO, SSL, domain, forms and more — with alerts by email (Brevo), Telegram and in-app, plus daily morning/night reports. 100% free stack, self-hosted on one Oracle Cloud Always Free ARM VM.
 
-> Status: **Phase 3** (incidents + email/Telegram/in-app alerts). The full deployment guide (Oracle VM, Docker, Caddy, Brevo, Telegram, PageSpeed key, backups) lands in Phase 7.
+> Status: **Phase 4** (PageSpeed, SSL, domain expiry, DNS, on-page SEO). The full deployment guide (Oracle VM, Docker, Caddy, Brevo, Telegram, PageSpeed key, backups) lands in Phase 7.
 
 ## What works today
 
@@ -16,6 +16,11 @@ Internal monitoring for client websites — uptime, speed, SEO, SSL, domain, for
 - **Channels:** Brevo email (React Email templates) + Telegram (HTML, multiple chats) + in-app (MongoDB Change Stream → SSE bell, polling fallback). 5+ alerts in 10 min → one grouped email; Brevo quota guard (250/day, 10 reserved for reports, digest after 200).
 - **Preview mode (`DRY_RUN=true`, default):** nothing is sent; every email/Telegram message is rendered and viewable at **/dev/emails** and **/dev/telegram**. Missing keys never crash anything — the channel just stays in preview.
 - **Worker watchdog:** the web app raises a CRITICAL alert itself if the worker heartbeat is 15+ min old.
+- **PageSpeed** (every 12 h, mobile + desktop via Google PSI): performance / SEO / accessibility / best-practice scores, lab Core Web Vitals, CrUX field data, top opportunities. Works **without an API key** (one run at a time, spaced out) and uses `PSI_API_KEY` automatically when set. HTTP 429 → run recorded as **“Skipped – rate limited”**, all PSI calls pause ~30 min, never a failure. Alerts use the **median of the last 3 runs** and need **2 consecutive runs** below the threshold.
+- **SSL** (daily): expiry (warn 30 d / critical 7 d), hostname mismatch, **incomplete chain (missing intermediate)**, self-signed/untrusted; apex **and** www are both checked when both resolve.
+- **Domain expiry** (daily): registrable domain from the Public Suffix List (`blog.client.co.in` → `client.co.in`), RDAP with WHOIS fallback, registrar + expiry date, cached per registrable domain (12 h; hourly near expiry). Platform subdomains (vercel.app, netlify.app, github.io, pages.dev, onrender.com…) show **“Managed by platform”**.
+- **DNS** (daily): A/AAAA/CNAME (site host) + NS/MX (domain) compared **as sets** (order/TTL ignored) against a baseline. Cloudflare-aware (IP moves inside Cloudflare's ranges ignored, NS changes still alert), CNAME-aware (target IP rotation ignored). **Accept this change** makes the new records the baseline. System resolver with DNS-over-HTTPS fallback.
+- **On-page SEO** (daily, homepage + important pages): noindex in the robots meta tag **and** the `X-Robots-Tag` header, robots.txt blocking `User-agent: *`, canonical pointing to another domain (staging/old), sitemap referenced in robots.txt and valid XML, title, description, H1, viewport, lang — shown as a pass/fail checklist with a “how to fix” hint per item.
 - **Dashboard:** overview + sites list (search, filter by status/client/tag, sort by status/response/name), 24 h sparklines, site detail with response-time chart, uptime % 24 h/7 d/30 d, 30-day status bar, latest result breakdown, **Run check now** (result appears without a page reload).
 
 ## Stack
@@ -68,7 +73,7 @@ Open http://localhost:3000 and sign in. Invite teammates from **Settings → Use
 ### Demo data & failure simulation
 
 ```bash
-pnpm seed      # 2 real public sites + 1 site pointing at the dev test target (HTTP 500)
+pnpm seed      # 2 real public sites + 2 dev test-target sites (HTTP 500, SEO noindex + staging canonical)
 ```
 
 The web app has a **dev-only** simulation endpoint (returns 404 when `NODE_ENV=production`). Add a site with one of these URLs to watch each failure path:
@@ -82,6 +87,8 @@ The web app has a **dev-only** simulation endpoint (returns 404 when `NODE_ENV=p
 | `block=cloudflare` | Cloudflare bot challenge → BLOCKED (WARN), not Down |
 | `redirect=3` / `redirect=9` | Redirect chain / redirect loop (too many redirects) |
 | `size=500` | Page padded to ~500 KB (page-size change) |
+| `noindex=meta` / `noindex=header` | robots meta `noindex` / `X-Robots-Tag: noindex` header (SEO FAIL) |
+| `canonical=https://staging.example.com/` | Canonical pointing to another domain (SEO FAIL) |
 
 ### Alerts without any accounts
 
@@ -96,7 +103,7 @@ With the default `DRY_RUN=true` (or while `BREVO_API_KEY` / `TELEGRAM_BOT_TOKEN`
 | `pnpm test` | Vitest (starts a throwaway MongoDB replica set) |
 | `pnpm typecheck` / `pnpm lint` | all packages / web |
 | `pnpm create-admin --email … [--name …] [--password …]` | create or promote an admin |
-| `pnpm seed` | add the 3 demo sites (idempotent) |
+| `pnpm seed` | add the 4 demo sites (idempotent) |
 
 ### Health endpoint
 

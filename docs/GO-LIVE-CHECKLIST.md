@@ -3,7 +3,7 @@
 Everything you need to create or configure **once all 7 phases are done**, in the order that works best.
 Nothing here is needed for local development — the app runs in **preview mode** without any accounts.
 
-> Maintained every phase. **Last updated: Phase 3** (email, Telegram, alerts).
+> Maintained every phase. **Last updated: Phase 4** (PageSpeed API key; SSL / domain / DNS / SEO checks need no accounts).
 > Legend: ✅ ready to set up now · 🕒 section completed in a later phase.
 
 ---
@@ -102,9 +102,31 @@ TELEGRAM_CHAT_ID=123456789,-1001234567890
 
 ---
 
-## 6. 🕒 Google PageSpeed Insights API key (Phase 4)
+## 6. ✅ Google PageSpeed Insights API key (performance & Lighthouse SEO scores)
 
-Free: 25,000 queries/day. Steps added in Phase 4. → `PSI_API_KEY`
+Free: **25,000 queries/day**, 400 per 100 s. SiteGuard uses 2 queries per site per run (mobile + desktop), every 12 h by default → 50 sites ≈ 200/day.
+
+**Without a key** SiteGuard still works, but Google's keyless quota is shared and is often **zero** (a keyless test on 24 Sep 2026 got HTTP 429 “Queries per day … limit 0”). Runs are then shown as **“Skipped – rate limited”**, retried after ~30 min, and are **never** counted as failures or alerts. So in practice you need the key to get real scores.
+
+1. [ ] Open **https://console.cloud.google.com/** and sign in with the company Google account.
+2. [ ] Top bar → project picker → **New project** → name `siteguard` → *Create* (no billing account needed).
+3. [ ] With that project selected: **APIs & Services → Library** → search **“PageSpeed Insights API”** → **Enable**.
+4. [ ] **APIs & Services → Credentials → + Create credentials → API key**. Copy it (starts with `AIza…`). → `PSI_API_KEY`
+5. [ ] Click the new key → **Edit API key** (recommended hardening):
+   - *API restrictions* → **Restrict key** → tick only **PageSpeed Insights API** → Save.
+   - *Application restrictions* → **IP addresses** → add the **VM public IP** (once the VM exists; leave “None” while testing locally, or add your office IP too).
+6. [ ] Put it in `.env` and restart the worker. It is picked up automatically — no other change:
+   ```env
+   PSI_API_KEY=AIza...
+   ```
+7. [ ] Check: open any site → **Performance** tab → the “Running without a PageSpeed API key” banner disappears after the next run; click **Run pagespeed check** (30–90 s) → scores and charts appear.
+   - With a key the worker runs 2 sites in parallel (1 without) and spaces calls ~1 s apart (20 s without).
+   - `PSI_API_KEY rejected by Google` in the result = typo in the key, API not enabled, or the IP restriction doesn't include the server IP.
+   - Optional manual key test in a browser: `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://example.com&key=AIza...` → JSON containing `lighthouseResult`.
+
+> Nothing else in Phase 4 needs an account: SSL, domain expiry (RDAP, WHOIS fallback), DNS (system resolver with DNS-over-HTTPS fallback) and on-page SEO only use public protocols.
+>
+> **Firewall note (Phase 7):** the VM must allow outbound TCP 443 (PSI, RDAP, DNS-over-HTTPS) and TCP 43 (WHOIS fallback for the few TLDs without RDAP).
 
 ---
 
@@ -158,7 +180,7 @@ Who watches the watcher? Two free, independent checks (details in Phase 7):
 | `EMAIL_DAILY_LIMIT` / `EMAIL_RESERVED_FOR_REPORTS` | Phase 3 | `250` / `10` |
 | `TELEGRAM_BOT_TOKEN` | Phase 3 | from @BotFather |
 | `TELEGRAM_CHAT_ID` | Phase 3 | comma-separated chat IDs |
-| `PSI_API_KEY` | Phase 4 | Google Cloud API key |
+| `PSI_API_KEY` | Phase 4 | Google Cloud API key (`AIza…`), restricted to PageSpeed Insights API — see §6 |
 | `HEARTBEAT_PING_URL` | Phase 7 | Healthchecks.io ping URL |
 | `SCREENSHOT_DIR` | Phase 5 | `/data/screenshots` (Docker volume) |
 | `APP_DOMAIN` / `ACME_EMAIL` | Phase 7 | Caddy HTTPS |

@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { connectDb } from "./connection";
 import { AlertEvent } from "./models/alert-event";
 import { CheckResult } from "./models/check-result";
+import { DomainCache } from "./models/domain-cache";
 import { EmailLog } from "./models/email-log";
 import { Incident } from "./models/incident";
 import { Invite } from "./models/invite";
@@ -28,6 +29,7 @@ const ALL_MODELS = [
   Invite,
   AlertEvent,
   Outbox,
+  DomainCache,
 ];
 
 /**

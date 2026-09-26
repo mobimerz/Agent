@@ -16,5 +16,6 @@ export * from "./models/maintenance-window";
 export * from "./models/invite";
 export * from "./models/alert-event";
 export * from "./models/outbox";
+export * from "./models/domain-cache";
 
 export { default as mongoose, Types } from "mongoose";

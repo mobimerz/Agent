@@ -1,0 +1,33 @@
+{
+  "description": "RDAP bootstrap file for Domain Name System registrations (subset)",
+  "publication": "2026-09-01T00:00:00Z",
+  "version": "1.0",
+  "services": [
+    [
+      [
+        "com",
+        "net"
+      ],
+      [
+        "https://rdap.verisign.com/com/v1/"
+      ]
+    ],
+    [
+      [
+        "in",
+        "xn--h2brj9c"
+      ],
+      [
+        "https://rdap.registry.in/"
+      ]
+    ],
+    [
+      [
+        "org"
+      ],
+      [
+        "https://rdap.publicinterestregistry.org/rdap/"
+      ]
+    ]
+  ]
+}
