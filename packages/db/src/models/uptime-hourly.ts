@@ -11,6 +11,8 @@ const uptimeHourlySchema = new Schema(
     total: { type: Number, default: 0 },
     up: { type: Number, default: 0 },
     down: { type: Number, default: 0 },
+    /** WARN results (slow, blocked, important page failing) — up, but degraded. */
+    warn: { type: Number, default: 0 },
     avgResponseMs: Number,
     p95ResponseMs: Number,
     minResponseMs: Number,

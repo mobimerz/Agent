@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { ACTIVE_CHECK_TYPES, siteInputSchema, type CheckType, type SiteInput } from "@siteguard/core";
-import { deleteSiteCascade, getSettings, Incident, JobState, jobKeys, mongoose, requestRunNow, Site, syncSiteJobs } from "@siteguard/db";
+import { deleteSiteCascade, getSettings, Incident, JobState, jobKeys, MaintenanceWindow, mongoose, requestRunNow, Site, syncSiteJobs } from "@siteguard/db";
 import { parseSitesCsv, type ImportPreview } from "@/lib/csv-import";
 import { db } from "@/lib/db";
 import { requireAdmin, requireSession } from "@/lib/session";
@@ -173,4 +174,38 @@ export async function commitImport(csv: string): Promise<ActionResult<{ created:
   }
   revalidateSites();
   return { ok: true, data: { created, skipped: preview.totalRows - created } };
+}
+
+// ─── Maintenance windows ─────────────────────────────────────────────
+
+const maintenanceSchema = z
+  .object({
+    startsAt: z.coerce.date(),
+    endsAt: z.coerce.date(),
+    reason: z.string().trim().max(200).default(""),
+  })
+  .refine((v) => v.endsAt > v.startsAt, { path: ["endsAt"], message: "End must be after start" })
+  .refine((v) => v.endsAt.getTime() - v.startsAt.getTime() <= 7 * 86400_000, { path: ["endsAt"], message: "At most 7 days" })
+  .refine((v) => v.endsAt > new Date(), { path: ["endsAt"], message: "This window is already over" });
+
+/** Checks keep running and are recorded, but no alerts are sent while a window is active. */
+export async function addMaintenanceWindow(siteId: string, input: { startsAt: string; endsAt: string; reason: string }): Promise<ActionResult> {
+  const session = await requireSession();
+  if (!mongoose.isValidObjectId(siteId)) return { ok: false, error: "Site not found" };
+  const parsed = maintenanceSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]!.message };
+  await db();
+  if (!(await Site.exists({ _id: siteId }))) return { ok: false, error: "Site not found" };
+  await MaintenanceWindow.create({ siteId, ...parsed.data, createdBy: session.user.name });
+  revalidateSites(siteId);
+  return { ok: true, data: undefined };
+}
+
+export async function deleteMaintenanceWindow(siteId: string, windowId: string): Promise<ActionResult> {
+  await requireSession();
+  if (!mongoose.isValidObjectId(windowId)) return { ok: false, error: "Not found" };
+  await db();
+  await MaintenanceWindow.deleteOne({ _id: windowId, siteId });
+  revalidateSites(siteId);
+  return { ok: true, data: undefined };
 }

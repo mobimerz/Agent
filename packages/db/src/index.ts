@@ -1,5 +1,6 @@
 export { connectDb, disconnectDb, getMongoClient, pingDb } from "./connection";
 export { ensureIndexes, listIndexes } from "./indexes";
+export { createBackup, listBackups, pruneBackups, restoreBackup, type BackupInfo, type BackupManifest, type RestoreResult } from "./backup";
 export { deleteSiteCascade, effectiveInterval, isCheckEnabled, requestRunNow, syncSiteJobs } from "./jobs";
 export type { Lean } from "./model-utils";
 

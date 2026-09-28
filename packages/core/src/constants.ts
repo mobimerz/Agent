@@ -42,15 +42,10 @@ export const MIN_INTERVALS: Record<CheckType, number> = {
  * Checks the worker can run today. Grows per build phase; jobs for other
  * types are kept disabled until their module exists.
  */
-export const ACTIVE_CHECK_TYPES: readonly CheckType[] = ["uptime", "content", "ssl", "domain", "dns", "pagespeed", "seo"];
+export const ACTIVE_CHECK_TYPES: readonly CheckType[] = ["uptime", "content", "ssl", "domain", "dns", "pagespeed", "seo", "links", "form", "browser", "headers"];
 
 /** Phase in which a not-yet-active check type ships (for UI hints). */
-export const CHECK_PHASE: Partial<Record<CheckType, number>> = {
-  links: 5,
-  form: 5,
-  browser: 5,
-  headers: 5,
-};
+export const CHECK_PHASE: Partial<Record<CheckType, number>> = {};
 
 /**
  * High-signal defacement / SEO-spam phrases (matched case-insensitively on

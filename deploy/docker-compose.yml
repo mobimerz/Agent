@@ -1,9 +1,10 @@
 # SiteGuard production stack — Oracle Cloud Always Free ARM VM (linux/arm64).
 #
-#   cd deploy && docker compose --env-file ../.env up -d
+#   cd deploy && docker compose --env-file ../.env up -d --build
 #
-# Phase 1 ships the MongoDB replica set. web, worker, caddy and backup
-# services are added in their phases (see bottom of file).
+# Services: mongo (replica set rs0, internal only) · web (Next.js) · worker
+# (checks, reports, backups, Chromium) · caddy (the only public service: 80/443,
+# automatic Let's Encrypt HTTPS). Full guide: docs/DEPLOY.md.
 
 name: siteguard
 
@@ -82,15 +83,91 @@ services:
     restart: unless-stopped
     logging: *logging
 
-  # ── Added in later phases ────────────────────────────────────────────
-  # web     (Phase 2/7): Next.js standalone, depends_on mongo: service_healthy
-  # worker  (Phase 2/7): Node 24 + Playwright Chromium (arm64)
-  # caddy   (Phase 7):   automatic HTTPS, only service publishing 80/443
-  # backup  (Phase 6):   nightly mongodump --gzip --archive, keep 7 days
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    image: siteguard-web:latest
+    depends_on:
+      mongo:
+        condition: service_healthy
+    env_file: ../.env
+    environment:
+      NODE_ENV: production
+      SCREENSHOT_DIR: /data/screenshots
+      BACKUP_DIR: /data/backups
+    volumes:
+      - screenshots:/data/screenshots:ro
+      - backups:/data/backups
+    expose:
+      - "3000"
+    networks: [internal]
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    restart: unless-stopped
+    logging: *logging
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.worker
+    image: siteguard-worker:latest
+    depends_on:
+      mongo:
+        condition: service_healthy
+    env_file: ../.env
+    environment:
+      NODE_ENV: production
+      SCREENSHOT_DIR: /data/screenshots
+      BACKUP_DIR: /data/backups
+    volumes:
+      - screenshots:/data/screenshots
+      - backups:/data/backups
+    # Reaps Chromium's child processes; Chromium also needs more /dev/shm than Docker's 64 MB.
+    init: true
+    shm_size: 512m
+    networks: [internal]
+    # Graceful shutdown: running checks get up to 20 s to finish.
+    stop_grace_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 3g
+    restart: unless-stopped
+    logging: *logging
+
+  caddy:
+    image: caddy:2.10-alpine
+    depends_on:
+      - web
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?set APP_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [internal]
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    restart: unless-stopped
+    logging: *logging
 
 volumes:
   mongo-data:
   mongo-keyfile:
+  screenshots:
+  backups:
+  caddy-data:
+  caddy-config:
 
 networks:
   internal:

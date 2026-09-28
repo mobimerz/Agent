@@ -30,5 +30,6 @@ export function toFormValues(site?: SiteLean | null): SiteFormValues {
     formPageUrl: site?.form?.pageUrl ?? "",
     formSelector: site?.form?.selector ?? "form",
     formTestSubmission: site?.form?.testSubmission ?? false,
+    formSuccessText: site?.form?.successText ?? "",
   };
 }

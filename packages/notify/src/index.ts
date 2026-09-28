@@ -9,6 +9,7 @@ export * from "./send";
 export * from "./alerts";
 export * from "./watchdog";
 export * from "./test-messages";
+export * from "./reports";
 
 /**
  * Extension point for future channels (Web Push/VAPID, WhatsApp, Slack):

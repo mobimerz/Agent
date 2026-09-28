@@ -167,7 +167,7 @@ export async function runCheckJob(job: JobStateLean, { settings, config, log }: 
     const finishedAt = new Date();
     if (outcome.skipped) return await recordSkipped(job, site._id, type, outcome, startedAt, finishedAt, jobLog);
 
-    const retries = settings.alerts?.confirmRetries ?? 2;
+    const retries = module.confirmRetries?.(site) ?? settings.alerts?.confirmRetries ?? 2;
     const retryDelaySec = settings.alerts?.confirmRetryDelaySec ?? 60;
     const prevFails = job.consecutiveFails ?? 0;
     // UNKNOWN (couldn't decide) neither confirms nor clears a failure streak.

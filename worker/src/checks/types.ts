@@ -33,5 +33,11 @@ export interface CheckModule {
   queue: QueueName;
   /** Hard cap for one run; the runner aborts and records FAIL/UNKNOWN beyond it. */
   maxRunMs: number;
+  /**
+   * FAIL confirmation re-checks for this site (default: settings.alerts.confirmRetries).
+   * 0 = a FAIL is confirmed at once — for checks with side effects (a form test
+   * submission re-checked every 60 s would email the client again and again).
+   */
+  confirmRetries?(site: SiteLean): number | undefined;
   run(site: SiteLean, ctx: CheckContext): Promise<CheckRunResult>;
 }

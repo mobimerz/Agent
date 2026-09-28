@@ -1,0 +1,33 @@
+# SiteGuard reverse proxy. Caddy gets and renews the Let's Encrypt certificate
+# automatically — ports 80 and 443 must be open and APP_DOMAIN must point at
+# this server (DNS A record, "DNS only" / grey cloud if you use Cloudflare).
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# Internal tool: keep it out of search engines.
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	reverse_proxy web:3000 {
+		# Stream responses immediately (live notification bell uses Server-Sent Events).
+		flush_interval -1
+	}
+
+	log {
+		output stdout
+		format console
+		level WARN
+	}
+}

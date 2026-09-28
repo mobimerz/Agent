@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
 import { DEFAULTS, DEFAULT_TIMEZONE } from "./constants";
 
@@ -7,19 +7,29 @@ import { DEFAULTS, DEFAULT_TIMEZONE } from "./constants";
  * Load the single repo-root `.env` (if present) into process.env without
  * overriding values that are already set (docker-compose env wins).
  */
-export function loadRootEnv(startDir = process.cwd()): string | undefined {
+/** Repo root = the directory holding pnpm-workspace.yaml (web and worker run with their own cwd). */
+export function findRepoRoot(startDir = process.cwd()): string | undefined {
   let dir = resolve(startDir);
   for (let i = 0; i < 6; i++) {
-    if (existsSync(join(dir, "pnpm-workspace.yaml"))) {
-      const file = join(dir, ".env");
-      if (existsSync(file)) process.loadEnvFile(file);
-      return file;
-    }
+    if (existsSync(join(dir, "pnpm-workspace.yaml"))) return dir;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
   return undefined;
+}
+
+export function loadRootEnv(startDir = process.cwd()): string | undefined {
+  const root = findRepoRoot(startDir);
+  if (!root) return undefined;
+  const file = join(root, ".env");
+  if (existsSync(file)) process.loadEnvFile(file);
+  return file;
+}
+
+/** Relative paths in .env (SCREENSHOT_DIR) are relative to the repo root, so web and worker agree. */
+export function resolveFromRoot(path: string): string {
+  return isAbsolute(path) ? path : resolve(findRepoRoot() ?? process.cwd(), path);
 }
 
 const emptyToUndefined = (v: unknown) => (v === "" ? undefined : v);
@@ -70,6 +80,11 @@ const baseSchema = z.object({
    * each channel is forced into preview while its credentials are missing.
    */
   DRY_RUN: boolish(true),
+  /** Where browser-check screenshots are stored (worker writes, web serves). Relative = from the repo root. */
+  SCREENSHOT_DIR: z.string().default("./.dev-data/screenshots"),
+  /** Nightly database backups (worker writes, Settings → System lists them). Relative = from the repo root. */
+  BACKUP_DIR: z.string().default("./.dev-data/backups"),
+  BACKUP_KEEP_DAYS: z.coerce.number().int().min(1).max(365).default(7),
 });
 
 export const webEnvSchema = baseSchema.extend({
@@ -79,7 +94,6 @@ export const webEnvSchema = baseSchema.extend({
 export const workerEnvSchema = baseSchema.extend({
   PSI_API_KEY: optionalString,
   HEARTBEAT_PING_URL: optionalUrl,
-  SCREENSHOT_DIR: z.string().default("./.dev-data/screenshots"),
 });
 
 export type WebEnv = z.infer<typeof webEnvSchema>;

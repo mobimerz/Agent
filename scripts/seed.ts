@@ -1,8 +1,9 @@
 /**
- * Seed 4 demo sites (idempotent — safe to run again):
+ * Seed 5 demo sites (idempotent — safe to run again):
  *   - 2 real public sites (healthy path)
  *   - 1 site pointing at the dev test target returning HTTP 500 (failure path)
  *   - 1 dev test target with SEO problems (noindex + staging canonical)
+ *   - 1 dev test target for browser/links/form checks (JS error, 404 link, failing form)
  *
  *   pnpm seed
  */
@@ -45,6 +46,15 @@ const DEMO_SITES: SiteInput[] = [
     clientName: "Test Lab",
     tags: ["demo", "test"],
     notes: "Dev test target with the classic launch mistakes: robots noindex + canonical to a staging domain. Needs `pnpm dev` running.",
+  },
+  {
+    name: "Browser & Form Demo",
+    url: `${appUrl}/api/dev/test-target?jserror=1&brokenlinks=1&form=fail`,
+    clientName: "Test Lab",
+    tags: ["demo", "test"],
+    notes: "Dev test target for Phase 5: JavaScript error, a 404 link + image, and a contact form whose submission fails. Needs `pnpm dev` running.",
+    checks: { form: { enabled: true } },
+    form: { pageUrl: "", selector: "form", testSubmission: true, successText: "Thank you for your message" },
   },
 ];
 

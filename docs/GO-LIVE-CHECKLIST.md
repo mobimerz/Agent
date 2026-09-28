@@ -3,8 +3,8 @@
 Everything you need to create or configure **once all 7 phases are done**, in the order that works best.
 Nothing here is needed for local development — the app runs in **preview mode** without any accounts.
 
-> Maintained every phase. **Last updated: Phase 4** (PageSpeed API key; SSL / domain / DNS / SEO checks need no accounts).
-> Legend: ✅ ready to set up now · 🕒 section completed in a later phase.
+> **Last updated: Phase 7** — all sections complete. The server itself is set up with [`DEPLOY.md`](DEPLOY.md) (step by step); this list is the accounts, keys and records around it.
+> Legend: ✅ ready to set up now.
 
 ---
 
@@ -16,12 +16,16 @@ Nothing here is needed for local development — the app runs in **preview mode*
 
 ---
 
-## 1. 🕒 Oracle Cloud Always Free VM (Phase 7)
+## 1. ✅ Oracle Cloud Always Free VM
 
-Full step-by-step lands in Phase 7 (VM shape `VM.Standard.A1.Flex`, 2 OCPU / 12 GB, Ubuntu 24.04 aarch64, ports 80/443 in the Security List **and** in the VM's iptables, Docker install).
+Step by step: [DEPLOY.md §1–§4](DEPLOY.md#1-create-the-vm).
 
-- [ ] VM created — note its **public IPv4**: `______________`
+- [ ] Oracle Cloud account (home region near your users, e.g. Mumbai/Hyderabad)
+- [ ] VM `VM.Standard.A1.Flex`, **2 OCPU / 12 GB**, Ubuntu 24.04 aarch64, public IPv4 — note it: `______________`
   (You need this IP for the DNS record *and* for Brevo's authorized IPs.)
+- [ ] Security List ingress: TCP 80, TCP 443 (+ UDP 443) from `0.0.0.0/0`
+- [ ] `bash deploy/scripts/setup-vm.sh` ran (Docker, iptables 80/443, swap, auto-updates)
+- [ ] Optional but recommended: account upgraded to Pay-As-You-Go (no charge within Always Free; avoids “out of capacity” and idle reclamation)
 
 ---
 
@@ -126,39 +130,78 @@ Free: **25,000 queries/day**, 400 per 100 s. SiteGuard uses 2 queries per site p
 
 > Nothing else in Phase 4 needs an account: SSL, domain expiry (RDAP, WHOIS fallback), DNS (system resolver with DNS-over-HTTPS fallback) and on-page SEO only use public protocols.
 >
-> **Firewall note (Phase 7):** the VM must allow outbound TCP 443 (PSI, RDAP, DNS-over-HTTPS) and TCP 43 (WHOIS fallback for the few TLDs without RDAP).
+> **Firewall note:** the VM must allow outbound TCP 443 (PSI, RDAP, DNS-over-HTTPS) and TCP 43 (WHOIS fallback for the few TLDs without RDAP).
 
 ---
 
-## 7. 🕒 External uptime monitor for SiteGuard itself (Phase 7)
+## 6b. ✅ Browser, form, links and security-header checks (Phase 5)
 
-Who watches the watcher? Two free, independent checks (details in Phase 7):
-- [ ] **UptimeRobot / Healthchecks.io HTTP check** on `https://monitor.mycompany.com/api/health` (200 = DB + worker OK, 503 = problem).
-- [ ] **Healthchecks.io ping** for the worker heartbeat (dead-man's switch; the worker pings every 5 min). → `HEARTBEAT_PING_URL`
+No accounts or keys needed. Before go-live:
+
+1. [ ] **Chromium on the server** — the worker image must include headless Chromium and its system libraries (Phase 7 Dockerfile runs `npx playwright install --with-deps chromium`; works on the ARM VM). Locally: `pnpm browsers:install`.
+2. [ ] **Screenshots volume** — `SCREENSHOT_DIR=/data/screenshots`, mounted into **both** the worker (writes) and the web container (serves them). Size: ~100 KB × 7 per site (≈ 35 MB for 50 sites).
+3. [ ] **Client consent for form test submissions** — “Test submission” sends a real `[SITEGUARD-TEST]` message every day through the client's contact form. Turn it on per site **only after the client agreed**; otherwise leave it off (the form is still render-checked daily). Tell the client the test email address `siteguard-test@example.com` so they can filter it.
+4. [ ] **Whitelisting** — sites behind Cloudflare/Wordfence may show a bot challenge to the headless browser. Allow the SiteGuard server IP (same rule as the uptime check). The browser's User-Agent is a normal Chrome UA ending in `SiteGuard-Monitor/1.0`.
+5. [ ] **Outbound traffic** — the weekly link crawl makes up to ~400 requests per site (5 at a time); no inbound ports needed.
+
+---
+
+## 7. ✅ External uptime monitor for SiteGuard itself
+
+Who watches the watcher? Two free, independent checks ([DEPLOY.md §10](DEPLOY.md#10-watch-the-watcher)):
+- [ ] **UptimeRobot** (free): *HTTP(s) – Keyword* monitor on `https://monitor.mycompany.com/api/health`, keyword `"status":"ok"`, every 5 min (200 = DB + worker OK, 503 = problem). Alert contact: your phone/email — *not* the SiteGuard Telegram bot (it may be what's down).
+- [ ] **Healthchecks.io** (free): check with period 5 min, grace 10 min → ping URL → `HEARTBEAT_PING_URL` in `.env` → `deploy.sh`. The worker pings every 5 min.
 - Also built in: if the worker's heartbeat is 15+ min old, the **web app itself** sends a critical “Monitoring worker is offline” alert (Telegram + email + in-app).
 
 ---
 
-## 8. 🕒 HTTPS, backups, production MongoDB (Phase 6–7)
+## 8. ✅ Backups, reports & data retention (Phase 6)
 
-- [ ] `APP_DOMAIN`, `ACME_EMAIL` for Caddy / Let's Encrypt (Phase 7)
-- [ ] Strong `MONGO_ROOT_PASSWORD` and `MONGO_APP_PASSWORD`, and the production `MONGODB_URI` (Phase 7)
-- [ ] Backup retention / restore test (Phase 6)
+No accounts needed. Before go-live:
+
+1. [ ] **Backup volume** — `BACKUP_DIR=/data/backups` mounted into the worker (and the web container, so Settings → System can list them / “Back up now”). `BACKUP_KEEP_DAYS=7`.
+2. [ ] **Off-site copy** — backups sit on the same VM as the database; a lost VM loses both. `deploy/scripts/backup-offsite.sh` copies them nightly with rclone to e.g. Google Drive (15 GB free) or Oracle Object Storage (20 GB free): configure an rclone remote, set `OFFSITE_REMOTE`, add the cron line — [DEPLOY.md §11](DEPLOY.md#11-off-site-backups).
+3. [ ] **Restore drill once** (10 min, do it before you need it): on a test machine / local dev, copy one backup folder, then `pnpm db:restore <folder> --yes` and open the dashboard. The automated test suite also verifies backup → wipe → restore on every run.
+4. [ ] **Report times** — Settings → Alerts, reports & thresholds (defaults 09:00 and 21:00 IST). Reports use the 10 emails/day reserved in the Brevo quota. Check the first real one arrives (Reports → “Send morning report now”).
+5. [ ] **Sender reputation** — reports go to the same `ALERT_TO_EMAILS`; ask recipients to mark the first one “Not spam”.
+
+Retention (automatic): raw check results 30 days · hourly uptime 1 year · reports 1 year · in-app notifications 90 days · email log 30 days · screenshots last 7 per site · backups `BACKUP_KEEP_DAYS`.
+
+---
+
+## 8b. ✅ HTTPS, production MongoDB
+
+- [ ] `APP_DOMAIN`, `ACME_EMAIL` in `.env` — Caddy gets and renews the Let's Encrypt certificate automatically (needs §2 DNS + §1 ports).
+- [ ] `bash deploy/scripts/generate-secrets.sh` → strong `MONGO_ROOT_PASSWORD`, `MONGO_APP_PASSWORD` and the matching production `MONGODB_URI` (`…@mongo:27017/siteguard?replicaSet=rs0&authSource=siteguard`). Set them **before the first start** — they're applied only to an empty database.
+- MongoDB is never published to the internet (internal Docker network only); only Caddy listens on 80/443.
 
 ---
 
 ## 9. ✅ App secrets & first admin
 
-- [ ] `AUTH_SECRET` — generate a fresh one for production (never reuse the dev value):
-  ```bash
-  node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
-  ```
+- [ ] `AUTH_SECRET` — a fresh one for production (never reuse the dev value), from `bash deploy/scripts/generate-secrets.sh`.
 - [ ] `APP_URL=https://monitor.mycompany.com` (must be exact — used for login cookies and every link in emails/Telegram).
-- [ ] `TIMEZONE=Asia/Kolkata`
-- [ ] After first start: create the admin:
+- [ ] `TIMEZONE=Asia/Kolkata`, `LOG_LEVEL=info`
+- [ ] After the first start, create the admin (the worker image carries the CLI tools):
   ```bash
-  docker compose exec web pnpm create-admin --email you@mycompany.com --name "Your Name"
+  cd /opt/siteguard/deploy
+  docker compose --env-file ../.env exec worker pnpm -w create-admin --email you@mycompany.com --name "Your Name"
   ```
+
+---
+
+## 10. ✅ Launch day
+
+- [ ] `bash deploy/scripts/deploy.sh` finishes with “SiteGuard is up”
+- [ ] https://monitor.mycompany.com shows a valid padlock; `/api/health` → `"status":"ok"`
+- [ ] Admin created, teammates invited
+- [ ] Sites added (or CSV imported); first results within a minute
+- [ ] `DRY_RUN=false`, Settings → Notifications: email + Telegram **Live**, both test messages received
+- [ ] PageSpeed key set — Performance tab shows scores, no “without API key” banner
+- [ ] UptimeRobot + Healthchecks.io set up; pause the worker once (`docker compose stop worker`) and confirm both alert you, then start it again
+- [ ] Reports → “Send morning report now” arrives by email + Telegram
+- [ ] Settings → System → “Back up now” works; off-site copy ran once; restore drill done (§8)
+- [ ] Clients with form test submissions have agreed (§6b)
 
 ---
 
@@ -181,6 +224,8 @@ Who watches the watcher? Two free, independent checks (details in Phase 7):
 | `TELEGRAM_BOT_TOKEN` | Phase 3 | from @BotFather |
 | `TELEGRAM_CHAT_ID` | Phase 3 | comma-separated chat IDs |
 | `PSI_API_KEY` | Phase 4 | Google Cloud API key (`AIza…`), restricted to PageSpeed Insights API — see §6 |
-| `HEARTBEAT_PING_URL` | Phase 7 | Healthchecks.io ping URL |
-| `SCREENSHOT_DIR` | Phase 5 | `/data/screenshots` (Docker volume) |
+| `BACKUP_DIR` / `BACKUP_KEEP_DAYS` | Phase 6 | `/data/backups` (volume in worker + web) / `7` |
+| `HEARTBEAT_PING_URL` | Phase 7 | Healthchecks.io ping URL (§7) |
+| `OFFSITE_REMOTE` | Phase 7 | rclone remote:folder for off-site backups, e.g. `gdrive:siteguard-backups` (§8) |
+| `SCREENSHOT_DIR` | Phase 5 | `/data/screenshots` — Docker volume shared by worker (writes) and web (serves); relative paths are from the repo root |
 | `APP_DOMAIN` / `ACME_EMAIL` | Phase 7 | Caddy HTTPS |

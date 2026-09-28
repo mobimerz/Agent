@@ -2,7 +2,7 @@
 
 Internal monitoring for client websites — uptime, speed, SEO, SSL, domain, forms and more — with alerts by email (Brevo), Telegram and in-app, plus daily morning/night reports. 100% free stack, self-hosted on one Oracle Cloud Always Free ARM VM.
 
-> Status: **Phase 4** (PageSpeed, SSL, domain expiry, DNS, on-page SEO). The full deployment guide (Oracle VM, Docker, Caddy, Brevo, Telegram, PageSpeed key, backups) lands in Phase 7.
+> Status: **Phase 7 — complete.** Production deployment: [`docs/DEPLOY.md`](docs/DEPLOY.md) · accounts & keys: [`docs/GO-LIVE-CHECKLIST.md`](docs/GO-LIVE-CHECKLIST.md).
 
 ## What works today
 
@@ -21,6 +21,15 @@ Internal monitoring for client websites — uptime, speed, SEO, SSL, domain, for
 - **Domain expiry** (daily): registrable domain from the Public Suffix List (`blog.client.co.in` → `client.co.in`), RDAP with WHOIS fallback, registrar + expiry date, cached per registrable domain (12 h; hourly near expiry). Platform subdomains (vercel.app, netlify.app, github.io, pages.dev, onrender.com…) show **“Managed by platform”**.
 - **DNS** (daily): A/AAAA/CNAME (site host) + NS/MX (domain) compared **as sets** (order/TTL ignored) against a baseline. Cloudflare-aware (IP moves inside Cloudflare's ranges ignored, NS changes still alert), CNAME-aware (target IP rotation ignored). **Accept this change** makes the new records the baseline. System resolver with DNS-over-HTTPS fallback.
 - **On-page SEO** (daily, homepage + important pages): noindex in the robots meta tag **and** the `X-Robots-Tag` header, robots.txt blocking `User-agent: *`, canonical pointing to another domain (staging/old), sitemap referenced in robots.txt and valid XML, title, description, H1, viewport, lang — shown as a pass/fail checklist with a “how to fix” hint per item.
+- **Browser health** (daily, real headless Chromium via Playwright): uncaught JavaScript errors, own scripts/stylesheets failing to load, **blank page** detection (crashed JS app / hidden PHP fatal), load time, and a **screenshot** per run (last 7 kept per site). One browser job at a time; Chromium is closed after 5 idle minutes.
+- **Contact form** (daily, opt-in per site): opens the form page in Chromium and checks the form, its fields and the submit button. **Test submission** (off by default — the client receives the email) fills `[SITEGUARD-TEST]` data (honeypot fields left empty), submits, and looks for the configured success text or common plugin messages (CF7, WPForms, Elementor, Gravity…). CAPTCHA forms are render-checked only. A failed test submission is **never re-submitted** every 60 s to confirm it.
+- **Broken links** (weekly): crawls up to 50 pages (per-site override), checks links, images, scripts and stylesheets; internal vs external; 403/429/bot walls on other sites count as “couldn't verify”, not broken; admin/logout/cart URLs are never visited; redirecting internal links listed.
+- **Security headers** (weekly): HSTS, CSP, clickjacking protection, nosniff, Referrer-Policy, Permissions-Policy, version disclosure → A–F grade + checklist with fixes. **Mixed content** (http scripts/styles on an https page, which browsers block) alerts on Telegram; missing headers are in-app only.
+- **Daily reports** (09:00 and 21:00 in the configured timezone, editable): email + Telegram + in-app, with **what changed since the last report** (went down / recovered / degraded, new SSL or domain expiries within 30 days, performance drops, sites added/paused), incidents opened/resolved, open incidents, renewals due and every site's uptime for the period. Uses the report slice of the email quota; each report is sent exactly once, and one missed by 3+ hours (server down) is skipped rather than sent late. The **Reports** page keeps them for a year; admins can “Send … report now”.
+- **History:** hourly uptime rollups (kept 1 year; raw results 30 days) → **90-day** status bar and uptime %. The first start backfills from the raw data.
+- **Maintenance windows** per site (Incidents tab): checks keep running, alerts and reminders pause; a banner shows on the site page while active.
+- **Settings → Alerts, reports & thresholds:** report times + channels, recipients (override .env), default thresholds, reminder interval. **Settings → System:** job status, retention, backups list, “Back up now”.
+- **Backups:** nightly at 02:30 (worker) — gzip'd EJSON per collection + manifest, pruned after `BACKUP_KEEP_DAYS`. `pnpm db:backup` / `pnpm db:restore <name> --yes`; restore is covered by an automated backup → wipe → restore test.
 - **Dashboard:** overview + sites list (search, filter by status/client/tag, sort by status/response/name), 24 h sparklines, site detail with response-time chart, uptime % 24 h/7 d/30 d, 30-day status bar, latest result breakdown, **Run check now** (result appears without a page reload).
 
 ## Stack
@@ -28,7 +37,7 @@ Internal monitoring for client websites — uptime, speed, SEO, SSL, domain, for
 | Part | Tech |
 |---|---|
 | Web | Next.js 16 (App Router, standalone), Tailwind 4 + shadcn/ui, Better Auth |
-| Worker | Node 24, croner, p-queue, Playwright (Phase 5) |
+| Worker | Node 24, croner, p-queue, Playwright (headless Chromium) |
 | DB | MongoDB 8.0 single-node replica set `rs0` (time-series, change streams) via Mongoose 9 |
 | Tooling | pnpm workspaces, TypeScript 6 (strict), Vitest + mongodb-memory-server |
 
@@ -40,7 +49,7 @@ packages/db       Mongoose models, connection, indexes
 packages/emails   React Email templates (alerts, digest, test, invite)
 packages/notify   Brevo + Telegram clients, preview outbox, quota guard, alert dispatcher, watchdog
 docs/             GO-LIVE-CHECKLIST.md — every account/key/DNS record needed at the end
-deploy/           docker-compose, Mongo init scripts (Caddy/backup later)
+deploy/           docker-compose, Dockerfiles (web, worker), Caddyfile, Mongo init, VM/deploy/backup scripts
 scripts/          dev database launcher, index sync
 ```
 
@@ -50,6 +59,7 @@ Requirements: **Node 24** (`.nvmrc`) and **pnpm 11**. Docker is *not* needed loc
 
 ```bash
 pnpm install
+pnpm browsers:install        # downloads headless Chromium once (~115 MB) for the browser/form checks
 cp .env.example .env          # then set AUTH_SECRET (see comment in the file) and APP_URL=http://localhost:3000
 pnpm dev                      # starts db + web + worker together
 ```
@@ -73,7 +83,7 @@ Open http://localhost:3000 and sign in. Invite teammates from **Settings → Use
 ### Demo data & failure simulation
 
 ```bash
-pnpm seed      # 2 real public sites + 2 dev test-target sites (HTTP 500, SEO noindex + staging canonical)
+pnpm seed      # 2 real public sites + 3 dev test-target sites (HTTP 500; SEO noindex + staging canonical; JS error + 404 link + failing form)
 ```
 
 The web app has a **dev-only** simulation endpoint (returns 404 when `NODE_ENV=production`). Add a site with one of these URLs to watch each failure path:
@@ -89,6 +99,11 @@ The web app has a **dev-only** simulation endpoint (returns 404 when `NODE_ENV=p
 | `size=500` | Page padded to ~500 KB (page-size change) |
 | `noindex=meta` / `noindex=header` | robots meta `noindex` / `X-Robots-Tag: noindex` header (SEO FAIL) |
 | `canonical=https://staging.example.com/` | Canonical pointing to another domain (SEO FAIL) |
+| `jserror=1` | Uncaught JavaScript error after load (browser check) |
+| `blank=1` | Crashed JS app → blank page (browser check) |
+| `brokenlinks=1` | A 404 link and a 404 image on the page (links check) |
+| `mixed=1` | http:// script on the page (headers check — only flagged on https sites) |
+| `form=ok` / `form=fail` | Contact form whose submission succeeds / fails (enable the form check + test submission, success text “Thank you for your message”) |
 
 ### Alerts without any accounts
 
@@ -103,18 +118,32 @@ With the default `DRY_RUN=true` (or while `BREVO_API_KEY` / `TELEGRAM_BOT_TOKEN`
 | `pnpm test` | Vitest (starts a throwaway MongoDB replica set) |
 | `pnpm typecheck` / `pnpm lint` | all packages / web |
 | `pnpm create-admin --email … [--name …] [--password …]` | create or promote an admin |
-| `pnpm seed` | add the 4 demo sites (idempotent) |
+| `pnpm seed` | add the 5 demo sites (idempotent) |
+| `pnpm browsers:install` | download headless Chromium for the browser/form checks |
+| `pnpm db:backup` | back up the database now (into `BACKUP_DIR`) |
+| `pnpm db:restore [name] [--yes]` | list backups / restore one (replaces the data — stop the worker first) |
 
 ### Health endpoint
 
 `GET /api/health` → `200 {"status":"ok"}` when MongoDB is reachable **and** the worker heartbeat is < 3 min old, otherwise `503`. Point UptimeRobot / Healthchecks.io at it.
 
-## Production (preview)
+## Production
 
-`deploy/docker-compose.yml` currently runs MongoDB with auth + keyfile as replica set `rs0` on the internal Docker network only (no published port), WiredTiger cache 1 GB. On first boot it creates the root user and a least-privilege app user (`deploy/mongo/init-app-user.sh`), and the healthcheck initiates the replica set.
+One Oracle Cloud Always Free ARM VM (2 OCPU / 12 GB) runs the whole stack with Docker Compose — step-by-step guide: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+
+| Service | Image | Notes |
+|---|---|---|
+| `caddy` | caddy:2.10 | the only public service (80/443), automatic Let's Encrypt HTTPS, security headers, SSE-friendly proxy |
+| `web` | `deploy/Dockerfile.web` | Next.js standalone, non-root, ~1 GB limit |
+| `worker` | `deploy/Dockerfile.worker` | checks, reports, rollups, backups, headless Chromium; also the CLI tools image (`pnpm -w create-admin`, `db:restore`) |
+| `mongo` | mongo:8.0 | replica set `rs0` with auth + keyfile, internal network only, least-privilege app user |
 
 ```bash
-cd deploy && docker compose --env-file ../.env up -d mongo
+bash deploy/scripts/setup-vm.sh          # once per VM: Docker, firewall, swap, auto-updates
+bash deploy/scripts/generate-secrets.sh  # values for .env
+bash deploy/scripts/deploy.sh [--pull]   # build + start + wait for /api/health (also for updates)
 ```
+
+Volumes: `mongo-data`, `screenshots`, `backups` (nightly, copied off-site by `deploy/scripts/backup-offsite.sh`), `caddy-data`. External monitoring: UptimeRobot on `/api/health` + Healthchecks.io heartbeat.
 
 > Line endings: `.gitattributes` forces LF for shell scripts, compose files and the Caddyfile so they run on Linux even when edited on Windows.

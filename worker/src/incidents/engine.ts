@@ -82,6 +82,27 @@ export function classify(type: CheckType, o: Pick<CheckRunResult, "status" | "re
     }
     return { severity: "INFO", title: "On-page SEO issues", email: false, telegram: false, reminders: false, confirmRuns: SEO_CONFIRM_RUNS };
   }
+  const telegramOnly = { email: false, telegram: true, reminders: false };
+  const inAppOnly = { email: false, telegram: false, reminders: false };
+  if (type === "form") {
+    // A broken contact form = lost leads for the client.
+    if (o.reason === "form_failed") return { severity: "WARNING", title: "Contact form submission failing", ...noRemind };
+    if (o.reason === "form_missing") return { severity: "WARNING", title: "Contact form missing", ...noRemind };
+  }
+  if (type === "browser") {
+    if (o.reason === "blank_page") return { severity: "WARNING", title: "Page renders blank in the browser", ...noRemind };
+    if (o.reason === "resource_errors") return { severity: "WARNING", title: "Site scripts/styles failing to load", ...telegramOnly };
+    if (o.reason === "js_errors") return { severity: "INFO", title: "JavaScript errors on the page", ...inAppOnly };
+  }
+  if (type === "links" && o.reason === "broken_links") {
+    // Weekly crawl: a broken link is a fact, confirm on the first run.
+    return { severity: "INFO", title: "Broken links found", ...inAppOnly, confirmRuns: 1 };
+  }
+  if (type === "headers") {
+    if (o.reason === "mixed_content") return { severity: "WARNING", title: "Mixed content breaks the page", ...telegramOnly, confirmRuns: 1 };
+    // Missing headers are a to-do list (shown in the Security tab), not an incident: most sites lack some.
+    return null;
+  }
   // Checks added in later phases fall back to: FAIL → WARNING, WARN → INFO (refined per check then).
   return o.status === "FAIL"
     ? { severity: "WARNING", title: `${CHECK_LABELS[type]} failing`, ...loud }

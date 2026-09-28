@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
-import { ExternalLinkIcon, ShieldAlertIcon } from "lucide-react";
-import { CHECK_PHASE, DEFAULT_THRESHOLDS, displayStatus, USER_AGENT, type CheckType, type LatestChecks } from "@siteguard/core";
+import { ExternalLinkIcon, ShieldAlertIcon, WrenchIcon } from "lucide-react";
+import { MaintenanceCard } from "@/components/sites/maintenance-card";
+import { DEFAULT_THRESHOLDS, displayStatus, USER_AGENT, type CheckType, type LatestChecks } from "@siteguard/core";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { DailyBars, RecentResultsTable, StatusText, UptimeResultDetail } from "@/components/sites/check-results";
 import { ResponseChart } from "@/components/sites/response-chart";
@@ -11,11 +12,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatInterval, formatMs, formatPct, formatTime, timeAgo } from "@/lib/format";
+import { formatDateTime, formatInterval, formatMs, formatPct, formatTime, timeAgo } from "@/lib/format";
 import { listIncidents } from "@/lib/queries/incidents";
-import { getJobData, getLatestVerdict, getPsiHistory } from "@/lib/queries/checks";
+import { getJobData, getLatestVerdict, getPsiHistory, listScreenshots } from "@/lib/queries/checks";
+import { BrowserPanel, FormPanel, LinksPanel, SecurityPanel } from "@/components/sites/phase5-panels";
 import { DnsCard, DomainCard, PerformancePanel, SeoPanel, SslCard } from "@/components/sites/phase4-panels";
-import { getDailyStatus, getJobs, getRecentResults, getResponseSeries, getSite, getUptimeStats } from "@/lib/queries/sites";
+import { getDailyStatus, getJobs, getMaintenanceWindows, getUptime90d, getRecentResults, getResponseSeries, getSite, getUptimeStats } from "@/lib/queries/sites";
 import { IncidentStatusText, SeverityBadge } from "@/components/incidents/severity-badge";
 import Link from "next/link";
 import type { Route } from "next";
@@ -27,12 +29,6 @@ export async function generateMetadata({ params }: PageProps<"/sites/[id]">) {
   const site = await getSite((await params).id);
   return { title: site?.name ?? "Site" };
 }
-
-const FUTURE_TABS: { value: string; label: string; types: CheckType[] }[] = [
-  { value: "forms", label: "Forms", types: ["form"] },
-  { value: "security", label: "Security", types: ["headers"] },
-  { value: "screenshots", label: "Screenshots", types: ["browser"] },
-];
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -49,13 +45,13 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
   const site = await getSite((await params).id);
   if (!site) notFound();
 
-  const [uptimeResults, contentResults, stats, day, week, days, jobs, incidents, psi, psiHistory, seo, ssl, domain, dns, dnsJob] = await Promise.all([
+  const [uptimeResults, contentResults, stats, day, week, days, jobs, incidents, psi, psiHistory, seo, ssl, domain, dns, dnsJob, browser, screenshots, linkResults, formResults, headers, uptime90, maintenance] = await Promise.all([
     getRecentResults(site._id, "uptime", 20),
     getRecentResults(site._id, "content", 10),
     getUptimeStats(site._id),
     getResponseSeries(site._id, "24h"),
     getResponseSeries(site._id, "7d"),
-    getDailyStatus(site._id, 30),
+    getDailyStatus(site._id, 90),
     getJobs(site._id),
     listIncidents({ site: String(site._id) }, 50),
     getLatestVerdict(site._id, "pagespeed"),
@@ -65,7 +61,15 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
     getLatestVerdict(site._id, "domain"),
     getLatestVerdict(site._id, "dns"),
     getJobData(site._id, "dns"),
+    getLatestVerdict(site._id, "browser"),
+    listScreenshots(site._id),
+    getRecentResults(site._id, "links", 10),
+    getRecentResults(site._id, "form", 10),
+    getLatestVerdict(site._id, "headers"),
+    getUptime90d(site._id),
+    getMaintenanceWindows(site._id),
   ]);
+  const activeMaintenance = maintenance.find((w) => w.state === "active");
   const minPerformance = site.thresholds?.minPerformance ?? DEFAULT_THRESHOLDS.minPerformance;
   const minSeo = site.thresholds?.minSeo ?? DEFAULT_THRESHOLDS.minSeo;
   const openIncidents = incidents.filter((i) => i.status !== "RESOLVED");
@@ -128,6 +132,14 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
         </Alert>
       )}
 
+      {activeMaintenance && (
+        <Alert className="border-warning/50 mb-4">
+          <WrenchIcon className="text-warning" />
+          <AlertTitle>In maintenance until {formatDateTime(activeMaintenance.endsAt)}</AlertTitle>
+          <AlertDescription>{activeMaintenance.reason || "Planned work."} Checks still run; alerts are paused (Incidents tab to change).</AlertDescription>
+        </Alert>
+      )}
+
       {paused && (
         <Alert className="mb-4">
           <AlertTitle>Monitoring paused</AlertTitle>
@@ -158,19 +170,19 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
             <TabsTrigger value="seo">SEO</TabsTrigger>
             <TabsTrigger value="ssl">SSL, Domain & DNS</TabsTrigger>
             <TabsTrigger value="incidents">Incidents{openIncidents.length ? ` (${openIncidents.length})` : ""}</TabsTrigger>
-            {FUTURE_TABS.map((t) => (
-              <TabsTrigger key={t.value} value={t.value}>
-                {t.label}
-              </TabsTrigger>
-            ))}
+            <TabsTrigger value="browser">Browser</TabsTrigger>
+            <TabsTrigger value="links">Links</TabsTrigger>
+            <TabsTrigger value="forms">Forms</TabsTrigger>
+            <TabsTrigger value="security">Security</TabsTrigger>
           </TabsList>
         </div>
 
         <TabsContent value="uptime" className="mt-4 grid gap-4">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
             <Stat label="Uptime 24 h" value={formatPct(stats.h24)} />
             <Stat label="Uptime 7 d" value={formatPct(stats.d7)} />
             <Stat label="Uptime 30 d" value={formatPct(stats.d30)} />
+            <Stat label="Uptime 90 d" value={formatPct(uptime90)} />
             <Stat label="Avg response 24 h" value={formatMs(stats.avgMs24)} />
             <Stat
               label="Schedule"
@@ -187,7 +199,7 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Last 30 days</CardTitle>
+              <CardTitle className="text-sm">Last 90 days</CardTitle>
             </CardHeader>
             <CardContent>
               <DailyBars days={days} />
@@ -295,7 +307,8 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
           <DnsCard siteId={id} latest={dns.result} jobData={dnsJob} />
         </TabsContent>
 
-        <TabsContent value="incidents" className="mt-4">
+        <TabsContent value="incidents" className="mt-4 grid gap-4">
+          <MaintenanceCard siteId={id} windows={maintenance} />
           {incidents.length === 0 ? (
             <div className="text-muted-foreground rounded-xl border border-dashed px-6 py-12 text-center text-sm">No incidents for this site.</div>
           ) : (
@@ -315,13 +328,46 @@ export default async function SiteDetailPage({ params }: PageProps<"/sites/[id]"
           )}
         </TabsContent>
 
-        {FUTURE_TABS.map((t) => (
-          <TabsContent key={t.value} value={t.value} className="mt-4">
-            <div className="text-muted-foreground rounded-xl border border-dashed px-6 py-12 text-center text-sm">
-              {t.label} checks arrive in Phase {CHECK_PHASE[t.types[0]!]}.
+        <TabsContent value="browser" className="mt-4 grid gap-4">
+          {enabled("browser") && (
+            <div className="flex justify-end">
+              <RunCheckButton siteId={id} type="browser" />
             </div>
-          </TabsContent>
-        ))}
+          )}
+          <BrowserPanel latest={browser.result} screenshots={screenshots} />
+        </TabsContent>
+
+        <TabsContent value="links" className="mt-4 grid gap-4">
+          {enabled("links") && (
+            <div className="flex justify-end">
+              <RunCheckButton siteId={id} type="links" />
+            </div>
+          )}
+          <LinksPanel latest={linkResults[0] ?? null} history={linkResults} />
+        </TabsContent>
+
+        <TabsContent value="forms" className="mt-4 grid gap-4">
+          {enabled("form") && (
+            <div className="flex justify-end">
+              <RunCheckButton siteId={id} type="form" />
+            </div>
+          )}
+          <FormPanel
+            enabled={enabled("form")}
+            config={{ pageUrl: site.form?.pageUrl ?? "", selector: site.form?.selector ?? "form", testSubmission: site.form?.testSubmission ?? false, successText: site.form?.successText ?? "" }}
+            latest={formResults[0] ?? null}
+            history={formResults}
+          />
+        </TabsContent>
+
+        <TabsContent value="security" className="mt-4 grid gap-4">
+          {enabled("headers") && (
+            <div className="flex justify-end">
+              <RunCheckButton siteId={id} type="headers" />
+            </div>
+          )}
+          <SecurityPanel latest={headers.result} />
+        </TabsContent>
       </Tabs>
     </>
   );

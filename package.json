@@ -19,7 +19,10 @@
     "test:watch": "vitest",
     "db:indexes": "tsx scripts/sync-indexes.ts",
     "seed": "tsx scripts/seed.ts",
-    "create-admin": "pnpm --filter @siteguard/web create-admin"
+    "create-admin": "pnpm --filter @siteguard/web create-admin",
+    "browsers:install": "pnpm --filter @siteguard/worker exec playwright install chromium",
+    "db:backup": "tsx scripts/db-backup.ts",
+    "db:restore": "tsx scripts/db-restore.ts"
   },
   "devDependencies": {
     "@siteguard/core": "workspace:*",

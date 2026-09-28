@@ -5,7 +5,11 @@ import { createNotifyContext, dispatchPendingAlerts, emailStatus, notifyConfigFr
 import { env } from "./env";
 import { logger } from "./logger";
 import { checkStability, sendReminders } from "./incidents/engine";
+import { runBackup } from "./jobs/backup";
 import { pingExternalHeartbeat, writeHeartbeat } from "./jobs/heartbeat";
+import { runRollup } from "./jobs/rollup";
+import { reportTick } from "./reports";
+import { closeBrowser } from "./lib/browser";
 import { Dispatcher, releaseStaleLocks } from "./scheduler/dispatcher";
 import { reconcileJobs } from "./scheduler/reconcile";
 import { getSettingsCached } from "./settings-cache";
@@ -26,6 +30,15 @@ async function incidentHousekeeping() {
   const reminders = await sendReminders(deps);
   const stable = await checkStability(deps);
   if (reminders || stable) logger.info({ reminders, stable }, "incident housekeeping");
+}
+
+async function sendDueReports() {
+  await reportTick({ settings: await getSettingsCached(), config: notifyConfig, log: logger });
+}
+
+async function rollup() {
+  const r = await runRollup();
+  if (r.backfilled) logger.info({ hours: r.hours }, "uptime rollups backfilled");
 }
 
 /** Wrap a job so one failure is logged and never crashes the process. */
@@ -82,7 +95,12 @@ async function main() {
     new Cron("*/5 * * * *", { name: "reconcile", protect: true }, safe("reconcile", () => reconcileJobs(logger))),
     new Cron("*/15 * * * * *", { name: "alerts", protect: true }, safe("alerts", deliverAlerts)),
     new Cron("30 * * * * *", { name: "incident-housekeeping", protect: true }, safe("incident-housekeeping", incidentHousekeeping)),
+    new Cron("10 * * * * *", { name: "reports", protect: true }, safe("reports", sendDueReports)),
+    new Cron("5 * * * *", { name: "rollup", protect: true }, safe("rollup", rollup)),
+    new Cron("30 2 * * *", { name: "backup", protect: true, timezone: env.TIMEZONE }, safe("backup", () => runBackup(logger))),
   );
+  // First start backfills the hourly rollups from all raw results still in retention.
+  void safe("rollup", rollup)();
   await pingExternalHeartbeat(logger);
 
   dispatcher.start();
@@ -96,6 +114,7 @@ async function shutdown(signal: string) {
   logger.info({ signal }, "shutting down");
   for (const c of crons) c.stop();
   await dispatcher.stop().catch((err: unknown) => logger.error({ err }, "error stopping dispatcher"));
+  await closeBrowser();
   await disconnectDb().catch((err: unknown) => logger.error({ err }, "error closing db"));
   logger.info("bye");
   process.exit(0);

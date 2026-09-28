@@ -51,8 +51,8 @@ describe("syncSiteJobs", () => {
     const site = await Site.create({ name: "A", url: "https://a.example.com", checks: { content: { enabled: false } } });
     await syncSiteJobs(site.toObject());
     const jobs = await JobState.find({ siteId: site._id }).lean();
-    // content is off for this site; links/form/browser/headers aren't implemented yet (Phase 5).
-    expect(jobs.map((j) => j.checkType).sort()).toEqual(["dns", "domain", "pagespeed", "seo", "ssl", "uptime"]);
+    // content is off for this site; the browser form check is opt-in (off by default).
+    expect(jobs.map((j) => j.checkType).sort()).toEqual(["browser", "dns", "domain", "headers", "links", "pagespeed", "seo", "ssl", "uptime"]);
     expect(jobs.find((j) => j.checkType === "uptime")!.intervalSec).toBe(300);
     expect(jobs.find((j) => j.checkType === "pagespeed")!.intervalSec).toBe(12 * 3600);
 

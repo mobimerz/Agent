@@ -8,7 +8,7 @@ import {
   type DisplayStatus,
   type LatestChecks,
 } from "@siteguard/core";
-import { CheckResult, JobState, Site, Types, mongoose, type SiteLean } from "@siteguard/db";
+import { CheckResult, JobState, MaintenanceWindow, Site, Types, UptimeHourly, mongoose, type SiteLean } from "@siteguard/db";
 import { db } from "../db";
 
 // ─── List ─────────────────────────────────────────────────────────────
@@ -273,21 +273,37 @@ export interface DayStatus {
   warn: number;
 }
 
-/** Per-day status for the status bar (raw data covers 30 days; 90 once rollups land in Phase 6). */
-export async function getDailyStatus(siteId: Types.ObjectId, days = 30, tz = process.env.TIMEZONE ?? "Asia/Kolkata"): Promise<DayStatus[]> {
+/**
+ * Per-day status for the status bar. Completed hours come from the hourly
+ * rollups (kept 1 year), the current hour from raw results — so 90 days work
+ * even though raw results expire after 30.
+ */
+export async function getDailyStatus(siteId: Types.ObjectId, days = 90, tz = process.env.TIMEZONE ?? "Asia/Kolkata"): Promise<DayStatus[]> {
   const since = new Date(Date.now() - days * 86400_000);
-  const rows = await CheckResult.aggregate<{ _id: string; total: number; down: number; warn: number }>([
-    { $match: { "meta.siteId": siteId, "meta.checkType": "uptime", checkedAt: { $gte: since }, attempt: { $in: [0, null] } } },
-    {
-      $group: {
-        _id: { $dateToString: { date: "$checkedAt", format: "%Y-%m-%d", timezone: tz } },
-        total: { $sum: 1 },
-        down: { $sum: { $cond: [{ $eq: ["$status", "FAIL"] }, 1, 0] } },
-        warn: { $sum: { $cond: [{ $eq: ["$status", "WARN"] }, 1, 0] } },
+  const hourStart = new Date(Math.floor(Date.now() / 3600_000) * 3600_000);
+  const dayOf = (field: string) => ({ $dateToString: { date: field, format: "%Y-%m-%d", timezone: tz } });
+  const [rolled, live] = await Promise.all([
+    UptimeHourly.aggregate<{ _id: string; total: number; down: number; warn: number }>([
+      { $match: { siteId, hour: { $gte: since, $lt: hourStart } } },
+      { $group: { _id: dayOf("$hour"), total: { $sum: "$total" }, down: { $sum: "$down" }, warn: { $sum: { $ifNull: ["$warn", 0] } } } },
+    ]),
+    CheckResult.aggregate<{ _id: string; total: number; down: number; warn: number }>([
+      { $match: { "meta.siteId": siteId, "meta.checkType": "uptime", checkedAt: { $gte: hourStart }, attempt: { $in: [0, null] }, status: { $ne: "UNKNOWN" } } },
+      {
+        $group: {
+          _id: dayOf("$checkedAt"),
+          total: { $sum: 1 },
+          down: { $sum: { $cond: [{ $eq: ["$status", "FAIL"] }, 1, 0] } },
+          warn: { $sum: { $cond: [{ $eq: ["$status", "WARN"] }, 1, 0] } },
+        },
       },
-    },
+    ]),
   ]);
-  const byDay = new Map(rows.map((r) => [r._id, r]));
+  const byDay = new Map<string, { total: number; down: number; warn: number }>();
+  for (const r of [...rolled, ...live]) {
+    const cur = byDay.get(r._id) ?? { total: 0, down: 0, warn: 0 };
+    byDay.set(r._id, { total: cur.total + r.total, down: cur.down + r.down, warn: cur.warn + r.warn });
+  }
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
   const out: DayStatus[] = [];
   for (let i = days - 1; i >= 0; i--) {
@@ -298,7 +314,33 @@ export async function getDailyStatus(siteId: Types.ObjectId, days = 30, tz = pro
   return out;
 }
 
+/** Uptime % over 90 days from the hourly rollups (null = no data yet). */
+export async function getUptime90d(siteId: Types.ObjectId): Promise<number | null> {
+  const [r] = await UptimeHourly.aggregate<{ total: number; up: number }>([
+    { $match: { siteId, hour: { $gte: new Date(Date.now() - 90 * 86400_000) } } },
+    { $group: { _id: null, total: { $sum: "$total" }, up: { $sum: "$up" } } },
+  ]);
+  return r?.total ? (r.up / r.total) * 100 : null;
+}
+
 export async function getJobs(siteId: Types.ObjectId) {
   const jobs = await JobState.find({ siteId }, { checkType: 1, enabled: 1, intervalSec: 1, nextRunAt: 1, lastRunAt: 1, consecutiveFails: 1, retryAttempt: 1 }).lean();
   return new Map(jobs.map((j) => [j.checkType as CheckType, j]));
+}
+
+/** Active + upcoming windows, then the last few past ones. */
+export async function getMaintenanceWindows(siteId: Types.ObjectId) {
+  const now = new Date();
+  const [upcoming, past] = await Promise.all([
+    MaintenanceWindow.find({ siteId, endsAt: { $gte: now } }).sort({ startsAt: 1 }).lean(),
+    MaintenanceWindow.find({ siteId, endsAt: { $lt: now } }).sort({ endsAt: -1 }).limit(3).lean(),
+  ]);
+  return [...upcoming, ...past].map((w) => ({
+    id: String(w._id),
+    startsAt: w.startsAt.toISOString(),
+    endsAt: w.endsAt.toISOString(),
+    reason: w.reason ?? "",
+    createdBy: w.createdBy ?? null,
+    state: (w.endsAt < now ? "past" : w.startsAt <= now ? "active" : "scheduled") as "past" | "active" | "scheduled",
+  }));
 }

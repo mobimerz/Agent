@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1.7
+# SiteGuard web (Next.js standalone). Build context = repo root:
+#   docker compose -f deploy/docker-compose.yml build web
+# Works on linux/arm64 (Oracle Ampere A1) and linux/amd64.
+
+FROM node:24-bookworm-slim AS base
+ENV PNPM_HOME=/pnpm \
+    PATH=/pnpm:$PATH \
+    NEXT_TELEMETRY_DISABLED=1 \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    COREPACK_HOME=/corepack
+RUN corepack enable && corepack install --global pnpm@11.8.0
+WORKDIR /app
+
+# ── Dependencies (cached until a manifest or the lockfile changes) ────
+FROM base AS deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY web/package.json web/
+COPY worker/package.json worker/
+COPY packages/core/package.json packages/core/
+COPY packages/db/package.json packages/db/
+COPY packages/emails/package.json packages/emails/
+COPY packages/notify/package.json packages/notify/
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --filter "@siteguard/web..."
+
+# ── Build ─────────────────────────────────────────────────────────────
+FROM deps AS build
+COPY . .
+# The app has no public/ folder today; the runner copies it, so make sure it exists.
+RUN mkdir -p web/public && pnpm --filter @siteguard/web build
+
+# ── Runtime: only the standalone server (~40 MB of node_modules) ─────
+FROM node:24-bookworm-slim AS runner
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0 \
+    NEXT_TELEMETRY_DISABLED=1
+WORKDIR /app
+RUN groupadd --gid 1001 app && useradd --uid 1001 --gid app --create-home app \
+    # Shared volumes (screenshots read, backups written by "Back up now") must belong to the app user.
+    && mkdir -p /data/screenshots /data/backups && chown -R app:app /data
+COPY --from=build --chown=app:app /app/web/.next/standalone ./
+# Standalone output doesn't include static assets or public/ — copy them next to the server.
+COPY --from=build --chown=app:app /app/web/.next/static ./web/.next/static
+COPY --from=build --chown=app:app /app/web/public ./web/public
+USER app
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "web/server.js"]

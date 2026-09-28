@@ -1,6 +1,10 @@
 import "server-only";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
+import { resolveFromRoot } from "@siteguard/core/env";
 import type { CheckType } from "@siteguard/core";
 import { CheckResult, JobState, jobKeys, type Types } from "@siteguard/db";
+import { env } from "../env";
 import type { ResultRow } from "./sites";
 
 /** One PageSpeed run, flattened for charts (null = metric missing that run). */
@@ -79,3 +83,23 @@ export async function getJobData(siteId: Types.ObjectId, type: CheckType): Promi
   return job?.data ? JSON.parse(JSON.stringify(job.data)) : null;
 }
 
+
+export interface Screenshot {
+  url: string;
+  takenAt: string | null;
+}
+
+/** Screenshots the browser check saved for a site, newest first (the worker keeps the last N). */
+export async function listScreenshots(siteId: Types.ObjectId): Promise<Screenshot[]> {
+  const dir = join(resolveFromRoot(env.SCREENSHOT_DIR), String(siteId));
+  const files = await readdir(dir).catch(() => [] as string[]);
+  return files
+    .filter((f) => f.endsWith(".jpg"))
+    .sort()
+    .reverse()
+    .map((f) => {
+      // "2026-09-28T06-15-00-123Z.jpg" → ISO
+      const m = /^(\d{4}-\d{2}-\d{2}T\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.jpg$/.exec(f);
+      return { url: `/api/screenshots/${String(siteId)}/${f}`, takenAt: m ? `${m[1]}:${m[2]}:${m[3]}.${m[4]}Z` : null };
+    });
+}

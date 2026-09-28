@@ -1,6 +1,7 @@
 import { XMLValidator } from "fast-xml-parser";
 import { SEO_ITEM_DEFS, SEO_ITEMS, sameSiteHost, type CheckReason, type SeoChecklistItem, type SeoItemId, type SeoItemStatus } from "@siteguard/core";
 import { detectBotProtection } from "../lib/bot-protection";
+import { decodeEntities } from "../lib/html";
 import { httpGet } from "../lib/http";
 import type { CheckModule, CheckRunResult } from "./types";
 
@@ -9,7 +10,7 @@ import type { CheckModule, CheckRunResult } from "./types";
 function attrs(tag: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const m of tag.matchAll(/([a-zA-Z:-]+)\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+))/g)) {
-    out[m[1]!.toLowerCase()] = (m[3] ?? m[4] ?? m[5] ?? "").trim();
+    out[m[1]!.toLowerCase()] = decodeEntities((m[3] ?? m[4] ?? m[5] ?? "").trim());
   }
   return out;
 }

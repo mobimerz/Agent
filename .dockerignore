@@ -1,0 +1,25 @@
+# Build context = repo root (see deploy/docker-compose.yml). Keep images small and secrets out.
+**/node_modules
+**/.next
+**/*.tsbuildinfo
+.git
+.github
+.claude
+.dev-data
+backups
+screenshots
+coverage
+test-results
+playwright-report
+**/*.log
+
+# Secrets never go into an image — compose passes them at runtime.
+.env
+.env.*
+!.env.example
+deploy/mongo/keyfile
+
+# Not needed at runtime
+docs
+**/test
+**/*.test.ts

@@ -38,6 +38,7 @@ export interface SiteFormValues {
   formPageUrl: string;
   formSelector: string;
   formTestSubmission: boolean;
+  formSuccessText: string;
 }
 
 const NONE = "__none";
@@ -68,7 +69,7 @@ function toInput(v: SiteFormValues): SiteInput {
     thresholds: { responseTimeWarnMs: v.responseTimeWarnMs || undefined, minPerformance: v.minPerformance || undefined, minSeo: v.minSeo || undefined },
     importantPages: splitList(v.importantPages, /\n/),
     content: { requiredKeyword: v.requiredKeyword, extraSpamWords: splitList(v.extraSpamWords) },
-    form: { pageUrl: v.formPageUrl, selector: v.formSelector || "form", testSubmission: v.formTestSubmission, successText: "" },
+    form: { pageUrl: v.formPageUrl, selector: v.formSelector || "form", testSubmission: v.formTestSubmission, successText: v.formSuccessText },
   };
 }
 
@@ -250,17 +251,18 @@ export function SiteForm({
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Contact form <Badge variant="outline" className="text-[10px]">Phase 5</Badge>
-          </CardTitle>
-          <CardDescription>Saved now, checked once the browser checks ship.</CardDescription>
+          <CardTitle>Contact form</CardTitle>
+          <CardDescription>Turn on “Contact Form” under Checks above. By default the form is only opened in a real browser and checked (fields + submit button) — nothing is sent.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <Field id="formUrl" label="Form page URL" hint="Full URL or path, e.g. /contact">
             <Input id="formUrl" value={v.formPageUrl} onChange={(e) => set("formPageUrl", e.target.value)} placeholder="/contact" />
           </Field>
-          <Field id="formSel" label="Form CSS selector">
+          <Field id="formSel" label="Form CSS selector" hint="Default “form” = first visible form (search forms are skipped).">
             <Input id="formSel" value={v.formSelector} onChange={(e) => set("formSelector", e.target.value)} placeholder="form" />
+          </Field>
+          <Field id="formOk" label="Success text" className="sm:col-span-2" hint="Text the form shows after a successful send, e.g. “Thank you for your message”. Empty = auto-detect common form plugins.">
+            <Input id="formOk" value={v.formSuccessText} onChange={(e) => set("formSuccessText", e.target.value)} placeholder="Thank you for your message" />
           </Field>
           <div className="flex items-start gap-3 sm:col-span-2">
             <Switch id="formTest" checked={v.formTestSubmission} onCheckedChange={(c) => set("formTestSubmission", c)} />

@@ -48,6 +48,19 @@ export const CHECK_REASONS = [
   "robots_blocked",
   "canonical_mismatch",
   "seo_issues",
+  // links
+  "broken_links",
+  // browser
+  "js_errors",
+  "resource_errors",
+  "blank_page",
+  // headers
+  "headers_missing",
+  "mixed_content",
+  // form
+  "form_missing",
+  "form_failed",
+  "form_captcha",
 ] as const;
 export type CheckReason = (typeof CHECK_REASONS)[number];
 
@@ -89,6 +102,15 @@ export const REASON_LABELS: Record<CheckReason, string> = {
   robots_blocked: "robots.txt blocks all crawlers",
   canonical_mismatch: "Canonical URL points to another domain",
   seo_issues: "SEO issues found",
+  broken_links: "Broken links found",
+  js_errors: "JavaScript errors",
+  resource_errors: "Page resources failing",
+  blank_page: "Page renders blank",
+  headers_missing: "Security headers missing",
+  mixed_content: "Mixed content (http on https)",
+  form_missing: "Contact form not found",
+  form_failed: "Contact form submission failed",
+  form_captcha: "Form has CAPTCHA — submission not tested",
 };
 
 /** Short hints shown next to the reason in the UI. */
@@ -129,6 +151,22 @@ export const REASON_HINTS: Partial<Record<CheckReason, string>> = {
   canonical_mismatch:
     "The canonical tag tells Google the real page lives on another domain (often a staging or old domain), so this site can drop out of search. Point canonical URLs at this site's own domain (SEO plugin → site URL settings).",
   seo_issues: "Some on-page SEO items failed. See the SEO checklist for each item and how to fix it.",
+  broken_links:
+    "Links or images on the site return 404/5xx or don't resolve. Fix or remove them (WordPress: Broken Link Checker / Redirection plugin; add 301 redirects for moved pages).",
+  js_errors:
+    "The page throws JavaScript errors in a real browser — menus, sliders, forms or checkout may not work. Check the browser console (F12) on the page; usually a plugin/theme update or a script that failed to load.",
+  resource_errors: "Scripts, stylesheets or images on the page fail to load (404/5xx/blocked). Check the listed URLs — often a deleted file, an expired CDN or a plugin that was removed.",
+  blank_page:
+    "The page loads but shows (almost) nothing — typical for a JavaScript app that crashed or a PHP fatal error hidden by the host. Open it in a browser and check the console and server error log.",
+  headers_missing:
+    "Recommended security headers are missing. Add them in the web server/CDN (Cloudflare Transform Rules, .htaccess, nginx add_header, Next.js headers()) — see the checklist for each header.",
+  mixed_content:
+    "An https page loads scripts, styles or frames over plain http. Browsers block them, which breaks the page. Change those URLs to https (WordPress: Better Search Replace http:// → https://).",
+  form_missing:
+    "The contact form was not found on the page with the configured selector. It may have been removed, renamed or broken by a plugin/theme update — visitors can't contact the client.",
+  form_failed:
+    "The test submission did not show the success message (or showed an error). Leads may be lost. Check the form plugin's email settings (SMTP), spam protection and error log.",
+  form_captcha: "The form uses a CAPTCHA, so SiteGuard checks that it renders but can't submit it. Not an error.",
 };
 
 export function reasonLabel(reason: string | null | undefined): string {

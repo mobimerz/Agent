@@ -11,6 +11,11 @@
  *   /api/dev/test-target?noindex=meta             → robots meta noindex (WordPress "Discourage search engines")
  *   /api/dev/test-target?noindex=header           → X-Robots-Tag: noindex header
  *   /api/dev/test-target?canonical=https://staging.example.com/ → canonical pointing to another domain
+ *   /api/dev/test-target?jserror=1                → uncaught JavaScript error after load (browser check)
+ *   /api/dev/test-target?blank=1                  → crashed JS app: blank page (browser check)
+ *   /api/dev/test-target?brokenlinks=1            → page with a 404 link and a 404 image (links check)
+ *   /api/dev/test-target?mixed=1                  → http:// script on the page (headers check; only on https)
+ *   /api/dev/test-target?form=ok | form=fail      → contact form whose submission succeeds / fails (form check)
  */
 export const dynamic = "force-dynamic";
 
@@ -46,6 +51,19 @@ async function handle(request: Request): Promise<Response> {
     );
   }
 
+  // Form endpoint used by ?form=…: POST → 200 or 500.
+  const formResult = q.get("formresult");
+  if (formResult && request.method === "POST") {
+    return Response.json({ ok: formResult === "ok" }, { status: formResult === "ok" ? 200 : 500 });
+  }
+
+  if (q.get("blank")) {
+    return new Response(
+      `<!doctype html><html lang="en"><head><title>App</title><script>throw new Error("Cannot read properties of undefined (reading 'map')")</script></head><body><div id="root"></div></body></html>`,
+      { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } },
+    );
+  }
+
   const status = Math.min(Math.max(Number(q.get("status") ?? 200) || 200, 100), 599);
   const noindex = q.get("noindex");
   const canonical = q.get("canonical");
@@ -56,6 +74,24 @@ async function handle(request: Request): Promise<Response> {
   let html = q.get("spam")
     ? page("Hacked by Anonymous", "Best online casino bonuses! Buy viagra cheap. Slot gacor hari ini.", head)
     : page(status >= 400 ? `Error ${status}` : "SiteGuard Test Target", esc(q.get("body") ?? DEFAULT_BODY), head);
+
+  const extra: string[] = [];
+  if (q.get("jserror")) extra.push(`<script>window.addEventListener("load", () => { checkoutWidget.init(); });</script>`);
+  if (q.get("brokenlinks")) {
+    extra.push(`<p><a href="/api/dev/test-target?status=404&amp;page=old-offer">Old offer</a> · <img src="/api/dev/test-target?status=404&amp;img=banner.jpg" alt="banner" width="1" height="1"></p>`);
+  }
+  if (q.get("mixed")) extra.push(`<script src="http://cdn.example.com/legacy.js"></script>`);
+  const form = q.get("form");
+  if (form) {
+    extra.push(`<form id="contact" action="/api/dev/test-target?formresult=${form === "fail" ? "fail" : "ok"}" method="post">
+      <input name="name" required placeholder="Name"> <input type="email" name="email" required placeholder="Email">
+      <textarea name="message" placeholder="Message"></textarea> <button type="submit">Send</button></form>
+      <p class="form-success" style="display:none">Thank you for your message</p><p class="form-error" style="display:none">Message could not be sent</p>
+      <script>document.getElementById("contact").addEventListener("submit", async (e) => { e.preventDefault();
+        const r = await fetch(e.target.action, { method: "POST", body: new FormData(e.target) });
+        document.querySelector(r.ok ? ".form-success" : ".form-error").style.display = "block"; });</script>`);
+  }
+  if (extra.length) html = html.replace("</body>", `${extra.join("\n")}</body>`);
 
   const sizeKb = Math.min(Number(q.get("size") ?? 0) || 0, 5000);
   if (sizeKb > 0) html = html.replace("</body>", `<!-- ${"x".repeat(sizeKb * 1024)} --></body>`);

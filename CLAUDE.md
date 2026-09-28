@@ -20,10 +20,15 @@
   - FAIL triggers 60 s confirmation re-checks; checks that are slow/quota-bound (PageSpeed) must use WARN, not FAIL.
   - Store trimmed metrics only — never raw Lighthouse / RDAP JSON.
   - Each new reason gets a label + a "how to fix" hint in `packages/core/src/reasons.ts`.
+  - Checks with side effects (form test submission) set `confirmRetries` → 0 so a FAIL is never re-run every 60 s.
+  - Browser checks use `withBrowserContext()` (`worker/src/lib/browser.ts`, one shared Chromium, queue concurrency 1). Chromium: `pnpm browsers:install`; browser tests skip with a note when it is missing.
+  - Crawlers never GET admin/logout/cart/add-to-cart URLs.
 - **Incident rules** live in `worker/src/incidents/engine.ts` (`classify`). New check types need an explicit classification there.
 - **Tests**: Vitest; DB tests use a throwaway replica set (`packages/db/test/setup-mongo.ts`). **No live network calls in tests** — use local servers, msw, or saved fixtures (`worker/test/fixtures/`).
 - **Missing API keys never crash anything**: channels/services degrade (preview mode, keyless PSI) and the UI says so.
 - `docs/GO-LIVE-CHECKLIST.md` is updated every phase with every account/key/DNS step the feature needs.
 - README "What works today" is updated every phase.
 - HTTP checks use GET (never HEAD) with the SiteGuard User-Agent; bot-protection responses are BLOCKED (WARN), never DOWN.
+- **Production** = `deploy/` (docker-compose, `Dockerfile.web` standalone, `Dockerfile.worker` = worker + CLI tools, Caddyfile, scripts) + `docs/DEPLOY.md`. New env vars go into `.env.example`, the GO-LIVE-CHECKLIST table and (if they're paths) compose `environment:`. Docker isn't installed on the dev machine: verify with `pnpm --filter @siteguard/web build` + running `web/.next/standalone/web/server.js` with `NODE_ENV=production`.
+- Web typecheck runs `next typegen` first (route types for `RouteContext<…>`); a stale `web/tsconfig.tsbuildinfo` can cause bogus Mongoose type errors — delete it.
 - Before finishing a phase: `pnpm typecheck`, `pnpm lint`, `pnpm test` must all pass. Commit only when the user asks (one commit per phase, message style like `git log`).

@@ -12,11 +12,11 @@ import { AcceptDnsButton } from "./accept-dns-button";
 import { StatusText } from "./check-results";
 import { CwvTrendCharts, ScoreHistoryCharts, SeriesLegend } from "./score-charts";
 
-function Empty({ children }: { children: React.ReactNode }) {
+export function Empty({ children }: { children: React.ReactNode }) {
   return <div className="text-muted-foreground rounded-xl border border-dashed px-6 py-10 text-center text-sm">{children}</div>;
 }
 
-function Verdict({ result }: { result: ResultRow }) {
+export function Verdict({ result }: { result: ResultRow }) {
   const hint = REASON_HINTS[result.reason];
   return (
     <div className="grid gap-1 text-sm">
@@ -203,7 +203,7 @@ export function PerformancePanel({ latest, skippedAfter, history, minPerformance
 
 // ─── SEO ────────────────────────────────────────────────────────────
 
-const ITEM_ICON: Record<SeoItemStatus, { icon: typeof CheckCircle2Icon; tone: string; label: string }> = {
+export const ITEM_ICON: Record<SeoItemStatus, { icon: typeof CheckCircle2Icon; tone: string; label: string }> = {
   pass: { icon: CheckCircle2Icon, tone: "text-success", label: "Pass" },
   fail: { icon: XCircleIcon, tone: "text-destructive", label: "Fail" },
   warn: { icon: AlertTriangleIcon, tone: "text-warning-foreground dark:text-warning", label: "Fix" },

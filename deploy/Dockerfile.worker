@@ -1,0 +1,45 @@
+# syntax=docker/dockerfile:1.7
+# SiteGuard worker (scheduler + all checks, incl. headless Chromium) — also the
+# "tools" image for one-off commands:
+#   docker compose exec worker pnpm -w create-admin --email you@company.com
+#   docker compose exec worker pnpm -w db:restore
+# Build context = repo root. linux/arm64 + linux/amd64.
+
+FROM node:24-bookworm-slim AS base
+ENV PNPM_HOME=/pnpm \
+    PATH=/pnpm:$PATH \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    COREPACK_HOME=/corepack
+# pnpm is fetched once at build time into a shared COREPACK_HOME, so the non-root user can run it offline.
+RUN corepack enable && corepack install --global pnpm@11.8.0 && chmod -R a+rX /corepack
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY web/package.json web/
+COPY worker/package.json worker/
+COPY packages/core/package.json packages/core/
+COPY packages/db/package.json packages/db/
+COPY packages/emails/package.json packages/emails/
+COPY packages/notify/package.json packages/notify/
+# Whole workspace (incl. dev deps): the worker runs TypeScript via tsx, and the
+# web package's CLI scripts (create-admin) run from this image too.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile
+
+FROM deps AS runner
+# Chromium + its system libraries (fonts, nss, …). Needs root for apt.
+RUN pnpm --filter @siteguard/worker exec playwright install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/*
+COPY . .
+RUN groupadd --gid 1001 app && useradd --uid 1001 --gid app --create-home app \
+    && mkdir -p /data/screenshots /data/backups && chown -R app:app /data \
+    && chmod -R o+rx /ms-playwright
+ENV NODE_ENV=production \
+    SCREENSHOT_DIR=/data/screenshots \
+    BACKUP_DIR=/data/backups
+USER app
+WORKDIR /app/worker
+# Direct node (not `pnpm start`) so SIGTERM reaches the worker for a graceful shutdown.
+CMD ["node", "--import", "tsx", "src/index.ts"]

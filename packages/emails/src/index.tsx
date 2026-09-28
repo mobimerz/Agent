@@ -1,9 +1,10 @@
 // Explicit import: works with both the classic (tsx/esbuild default) and automatic JSX runtimes.
 import * as React from "react";
 import { render } from "@react-email/components";
-import { alertEmoji, formatDuration, type AlertData } from "@siteguard/core";
+import { alertEmoji, formatDuration, type AlertData, type ReportSnapshot } from "@siteguard/core";
 
 import { COLORS } from "./layout";
+import { ReportEmail, reportSubject } from "./report";
 import { AlertEmail, DigestEmail, SimpleEmail } from "./templates";
 
 export interface RenderedEmail {
@@ -75,4 +76,9 @@ export function renderInviteEmail(opts: { inviteUrl: string; invitedBy: string; 
       footer="If you weren't expecting this, you can ignore this email."
     />,
   );
+}
+
+export function renderReportEmail(opts: { report: ReportSnapshot; timeZone: string; appUrl: string; reportUrl: string }): Promise<RenderedEmail> {
+  const dateLabel = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: opts.timeZone }).format(new Date(opts.report.generatedAt));
+  return renderBoth(reportSubject(opts.report, dateLabel), <ReportEmail {...opts} />);
 }

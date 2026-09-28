@@ -9,3 +9,5 @@ export * from "./alerts";
 export * from "./schemas/site";
 export * from "./domain";
 export * from "./seo";
+export * from "./headers";
+export * from "./report";
